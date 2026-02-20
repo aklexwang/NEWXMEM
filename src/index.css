@@ -1,0 +1,314 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased min-h-screen w-full;
+    font-family: 'Rajdhani', system-ui, sans-serif;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #root {
+    min-height: 100%;
+    width: 100%;
+  }
+  body::-webkit-scrollbar,
+  html::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: 'Orbitron', sans-serif;
+  }
+
+  .glass-cyber {
+    @apply rounded-2xl border border-white/10 shadow-xl;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  /* 계좌 카드용 글래스모피즘 + 네온 테두리 */
+  .glass-card-neon {
+    @apply rounded-2xl shadow-xl w-full;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.08);
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-300 font-display;
+    background: linear-gradient(135deg, #06b6d4 0%, #0ea5e9 50%, #6366f1 100%);
+    @apply text-white;
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.4), 0 0 40px rgba(6, 182, 212, 0.2);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.6), 0 0 50px rgba(6, 182, 212, 0.25);
+  }
+
+  .btn-success {
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-300 font-display;
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    @apply text-white;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.35), 0 0 30px rgba(16, 185, 129, 0.2);
+  }
+  .btn-success:hover {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+  }
+
+  .btn-outline {
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-300 font-display border-2 border-cyan-400/60 text-cyan-300 bg-transparent;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+  }
+  .btn-outline:hover {
+    @apply bg-cyan-500/10;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+  }
+
+  .input-neon {
+    @apply w-full h-14 px-4 rounded-xl bg-slate-800/80 border border-slate-600/60 text-slate-100 outline-none transition-all duration-300;
+  }
+  .input-neon:focus {
+    border-color: rgba(6, 182, 212, 0.6);
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.15), 0 0 24px rgba(6, 182, 212, 0.25);
+  }
+  .input-wrap-glow {
+    box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.1);
+  }
+  .input-wrap-glow:focus-within {
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2), 0 0 24px rgba(6, 182, 212, 0.2);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none !important;
+    width: 0;
+    height: 0;
+  }
+  .scrollbar-hide * {
+    scrollbar-width: none;
+  }
+  .scrollbar-hide *::-webkit-scrollbar {
+    display: none;
+  }
+  .text-point-glow {
+    @apply font-bold tabular-nums font-display;
+    color: #67e8f9;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.3);
+  }
+}
+
+/* 메시 그라데이션 배경 - 아주 느리게 움직임 */
+@keyframes mesh-move {
+  0%, 100% {
+    background-position: 0% 0%, 100% 100%, 50% 50%;
+  }
+  33% {
+    background-position: 100% 0%, 0% 100%, 80% 20%;
+  }
+  66% {
+    background-position: 0% 100%, 100% 0%, 20% 80%;
+  }
+}
+
+.mesh-bg {
+  background: 
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(6, 182, 212, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(15, 23, 42, 0.9) 0%, transparent 100%);
+  background-size: 200% 200%, 200% 200%, 100% 100%;
+  animation: mesh-move 25s ease-in-out infinite;
+}
+
+/* 홀로그램 그리드 - 실제 스캔 중: 스캔 라인 + 행 단위 데이터 읽기 */
+@keyframes scan-line-sweep {
+  0% { transform: translateY(-100%); opacity: 0; }
+  5% { opacity: 1; }
+  95% { opacity: 1; }
+  100% { transform: translateY(calc(100% + 120px)); opacity: 0; }
+}
+
+@keyframes grid-scan {
+  0%, 100% {
+    opacity: 0.35;
+    filter: brightness(0.6);
+  }
+  15% {
+    opacity: 0.95;
+    filter: brightness(1.35);
+  }
+  30%, 100% {
+    opacity: 0.35;
+    filter: brightness(0.6);
+  }
+}
+
+.hologram-scan-wrapper {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  overflow: hidden;
+}
+
+.hologram-scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.15) 20%,
+    rgba(34, 211, 238, 0.7) 50%,
+    rgba(34, 211, 238, 0.15) 80%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 12px rgba(34, 211, 238, 0.8),
+    0 0 24px rgba(34, 211, 238, 0.4);
+  animation: scan-line-sweep 2.4s linear infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hologram-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 3px;
+  width: 110px;
+  height: 110px;
+  perspective: 280px;
+  transform-style: preserve-3d;
+  transform: rotateX(12deg) rotateY(-8deg);
+}
+
+.hologram-grid span {
+  border-radius: 4px;
+  animation: grid-scan 2.4s ease-out infinite;
+  transform-style: preserve-3d;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.4),
+    0 0 10px currentColor;
+}
+
+/* 스캔 라인이 지나가는 순서대로 행 단위로 셀 밝기 피크 (1행→5행) */
+.hologram-grid span[data-cell]:nth-child(-n+5)   { animation-delay: 0s; }
+.hologram-grid span[data-cell]:nth-child(n+6):nth-child(-n+10)  { animation-delay: 0.48s; }
+.hologram-grid span[data-cell]:nth-child(n+11):nth-child(-n+15) { animation-delay: 0.96s; }
+.hologram-grid span[data-cell]:nth-child(n+16):nth-child(-n+20) { animation-delay: 1.44s; }
+.hologram-grid span[data-cell]:nth-child(n+21):nth-child(-n+25) { animation-delay: 1.92s; }
+
+/* 컬러 그룹: 청록 */
+.hologram-grid span:nth-child(5n+1),
+.hologram-grid span:nth-child(5n+3) {
+  background: linear-gradient(165deg, rgba(6, 182, 212, 0.7) 0%, rgba(6, 182, 212, 0.25) 50%, rgba(2, 132, 160, 0.4) 100%);
+  border: 1px solid rgba(34, 211, 238, 0.6);
+  color: rgba(34, 211, 238, 0.5);
+}
+/* 컬러 그룹: 보라/바이올렛 */
+.hologram-grid span:nth-child(5n+2),
+.hologram-grid span:nth-child(n+11):nth-child(-n+15) {
+  background: linear-gradient(165deg, rgba(139, 92, 246, 0.65) 0%, rgba(99, 102, 241, 0.2) 50%, rgba(79, 70, 229, 0.35) 100%);
+  border: 1px solid rgba(167, 139, 250, 0.55);
+  color: rgba(167, 139, 250, 0.45);
+}
+/* 컬러 그룹: 마젠타/핑크 */
+.hologram-grid span:nth-child(5n+4),
+.hologram-grid span:nth-child(n+21):nth-child(-n+25) {
+  background: linear-gradient(165deg, rgba(236, 72, 153, 0.5) 0%, rgba(219, 39, 119, 0.2) 50%, rgba(190, 24, 93, 0.3) 100%);
+  border: 1px solid rgba(244, 114, 182, 0.5);
+  color: rgba(244, 114, 182, 0.4);
+}
+/* 컬러 그룹: 시안+보라 믹스 (나머지) */
+.hologram-grid span:nth-child(5n+5),
+.hologram-grid span:nth-child(n+6):nth-child(-n+10),
+.hologram-grid span:nth-child(n+16):nth-child(-n+20) {
+  background: linear-gradient(165deg, rgba(34, 211, 238, 0.5) 0%, rgba(99, 102, 241, 0.25) 50%, rgba(30, 58, 138, 0.35) 100%);
+  border: 1px solid rgba(103, 232, 249, 0.5);
+  color: rgba(103, 232, 249, 0.4);
+}
+
+
+@keyframes count-pop {
+  0% { transform: scale(1.1); opacity: 0.9; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-count-pop {
+  animation: count-pop 0.4s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.35s ease-out forwards;
+}
+
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(0, 255, 255, 0.4); }
+  50% { opacity: 0.85; box-shadow: 0 0 30px rgba(0, 255, 255, 0.6); }
+}
+.animate-sync-pulse {
+  animation: sync-pulse 1.5s ease-in-out infinite;
+}
+
+/* AI 봇 부유 애니메이션 */
+@keyframes bot-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.02); }
+}
+.animate-bot-float {
+  animation: bot-float 2.5s ease-in-out infinite;
+}
+
+/* 깜빡임 효과 (껌벅껌벅) */
+@keyframes text-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.animate-text-blink {
+  animation: text-blink 1.2s ease-in-out infinite;
+}
+
+/* 홀로그램 그리드 느낌 AU 봇 래퍼 + 스캔 라인 */
+.hologram-bot-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.hologram-bot-svg {
+  filter: drop-shadow(0 0 18px rgba(6, 182, 212, 0.35)) drop-shadow(0 0 8px rgba(139, 92, 246, 0.2));
+  position: relative;
+  z-index: 0;
+}
+
+/* 숫자 입력 스피너 제거 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
