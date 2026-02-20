@@ -111,6 +111,68 @@
     color: #67e8f9;
     text-shadow: 0 0 10px rgba(0, 255, 255, 0.5), 0 0 20px rgba(0, 255, 255, 0.3);
   }
+
+  /* 구매자 화면: 주황색 계열 테마 (판매자 시안과 차별화) */
+  .iphone-frame-buyer .text-point-glow {
+    color: #fb923c;
+    text-shadow: 0 0 10px rgba(251, 146, 60, 0.55), 0 0 20px rgba(249, 115, 22, 0.35);
+  }
+  .iphone-frame-buyer .btn-primary {
+    background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%);
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.45), 0 0 40px rgba(234, 88, 12, 0.25);
+  }
+  .iphone-frame-buyer .btn-primary:hover {
+    box-shadow: 0 0 25px rgba(249, 115, 22, 0.6), 0 0 50px rgba(249, 115, 22, 0.3);
+  }
+  .iphone-frame-buyer .btn-outline {
+    border-color: rgba(251, 146, 60, 0.6);
+    color: #fdba74;
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.35);
+  }
+  .iphone-frame-buyer .btn-outline:hover {
+    background: rgba(249, 115, 22, 0.1);
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.5);
+  }
+  .iphone-frame-buyer .glass-card-neon {
+    border-color: rgba(251, 146, 60, 0.25);
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.1);
+  }
+  .iphone-frame-buyer .input-wrap-glow:focus-within {
+    border-color: rgba(251, 146, 60, 0.6);
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2), 0 0 24px rgba(249, 115, 22, 0.2);
+  }
+  .iphone-frame-buyer .hologram-scan-line {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(251, 146, 60, 0.15) 20%,
+      rgba(249, 115, 22, 0.7) 50%,
+      rgba(251, 146, 60, 0.15) 80%,
+      transparent 100%
+    );
+    box-shadow: 0 0 12px rgba(249, 115, 22, 0.7), 0 0 24px rgba(249, 115, 22, 0.4);
+  }
+  .iphone-frame-buyer .hologram-grid span {
+    background: linear-gradient(165deg, rgba(251, 146, 60, 0.5) 0%, rgba(249, 115, 22, 0.25) 50%, rgba(234, 88, 12, 0.35) 100%) !important;
+    border-color: rgba(251, 146, 60, 0.55) !important;
+    color: rgba(251, 146, 60, 0.5) !important;
+  }
+  .iphone-frame-buyer .hologram-bot-svg {
+    filter: drop-shadow(0 0 18px rgba(249, 115, 22, 0.4)) drop-shadow(0 0 8px rgba(234, 88, 12, 0.25));
+  }
+  /* 구매자 화면 내 cyan → 주황 치환 */
+  .iphone-frame-buyer .text-cyan-400,
+  .iphone-frame-buyer .text-cyan-300\/90 { color: #fb923c !important; }
+  .iphone-frame-buyer .hover\:text-cyan-400:hover { color: #fb923c !important; }
+  .iphone-frame-buyer .border-cyan-400\/60,
+  .iphone-frame-buyer .focus-within\:border-cyan-400\/60 { border-color: rgba(251, 146, 60, 0.6) !important; }
+  .iphone-frame-buyer .hover\:border-cyan-500\/50:hover { border-color: rgba(251, 146, 60, 0.5) !important; }
+  .iphone-frame-buyer .bg-cyan-400\/80,
+  .iphone-frame-buyer .bg-cyan-400\/60,
+  .iphone-frame-buyer .bg-cyan-400\/40 { background-color: rgba(251, 146, 60, 0.7) !important; }
+  .iphone-frame-buyer .text-cyan-300 { color: #fdba74 !important; }
+  .iphone-frame-buyer input:focus,
+  .iphone-frame-buyer .focus\:ring-cyan-500:focus { --tw-ring-color: rgba(249, 115, 22, 0.5); }
 }
 
 /* 메시 그라데이션 배경 - 아주 느리게 움직임 */

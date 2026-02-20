@@ -1,18 +1,60 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { sellerSessionUser, buyerSessionUser } from './data/matchMock';
+import { sellerSessionUser, buyerSessionUser, createBuyerUserForIndex } from './data/matchMock';
+import type { User } from './types';
 import { computeMatchResult } from './data/matchMock';
 
 const MATCH_DELAY_MS = 2000;
 const CONFIRM_DELAY_MS = 1500;
 const COUNT_DURATION_MS = 1200;
+const MAX_BUYERS = 5;
 
 type SimPhase = 'idle' | 'searching' | 'confirming' | 'trading' | 'completed';
 
-/** 아이폰 목업 프레임: 홈바, 스크롤바 제거. 반응형: 작은 화면에서 축소 */
-function IPhoneFrame({ title, children }: { title: string; children: React.ReactNode }) {
+/** 구매자 한 명 분의 상태 (한 개의 구매자 화면) */
+export type BuyerSlot = {
+  user: User;
+  amount: number;
+  started: boolean;
+  depositDone: boolean;
+  clickedNew: boolean;
+  searchTimerSeconds: number;
+  currentPoints: number;
+  matchConfirmed: boolean;
+};
+
+function createInitialBuyerSlot(index: number): BuyerSlot {
+  return {
+    user: createBuyerUserForIndex(index),
+    amount: 0,
+    started: false,
+    depositDone: false,
+    clickedNew: false,
+    searchTimerSeconds: 300,
+    currentPoints: 0,
+    matchConfirmed: false,
+  };
+}
+
+/** 아이폰 목업 프레임: 홈바, 스크롤바 제거. 반응형: 작은 화면에서 축소. titleAction은 제목 오른쪽(숫자 옆)에 붙음. variant=buyer 시 주황 테마 */
+function IPhoneFrame({
+  title,
+  titleAction,
+  variant = 'seller',
+  children,
+}: {
+  title: string;
+  titleAction?: React.ReactNode;
+  variant?: 'buyer' | 'seller';
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center w-full sm:w-auto">
-      <div className="text-slate-400 text-xs sm:text-sm mb-2 sm:mb-3 font-medium font-display tracking-wider">{title}</div>
+    <div
+      className={`flex flex-col items-center justify-center w-full sm:w-auto ${variant === 'buyer' ? 'iphone-frame-buyer' : ''}`}
+    >
+      <div className="flex items-center justify-center gap-1.5 mb-2 sm:mb-3">
+        <span className="text-slate-400 text-xs sm:text-sm font-medium font-display tracking-wider">{title}</span>
+        {titleAction}
+      </div>
       <div className="relative w-[280px] min-[380px]:w-[300px] sm:w-[318px] rounded-[2.25rem] min-[380px]:rounded-[2.5rem] sm:rounded-[2.75rem] p-1.5 min-[380px]:p-2 bg-slate-800/90 shadow-2xl ring-1 ring-white/10 backdrop-blur-sm">
         <div className="rounded-[1.9rem] min-[380px]:rounded-[2.1rem] sm:rounded-[2.25rem] overflow-hidden bg-slate-900/95 ring-2 ring-white/5">
           <div className="h-[484px] min-[380px]:h-[520px] sm:h-[554px] overflow-y-auto overflow-x-hidden scrollbar-hide flex flex-col bg-gradient-to-b from-slate-900/80 to-slate-800/80 px-3 min-[380px]:px-4 pt-1 sm:pt-2 pb-0">
@@ -144,28 +186,38 @@ function useCountUp(end: number, start: number, active: boolean) {
 export default function App() {
   const MIN_POINT_AMOUNT = 10_000;
   const [sellerAmount, setSellerAmount] = useState(0);
-  const [buyerAmount, setBuyerAmount] = useState(0);
   const [sellerStarted, setSellerStarted] = useState(false);
-  const [buyerStarted, setBuyerStarted] = useState(false);
   const [phase, setPhase] = useState<SimPhase>('idle');
   const [matchResult, setMatchResult] = useState<ReturnType<typeof computeMatchResult>>(null);
-  const [buyerDepositDone, setBuyerDepositDone] = useState(false);
   const [sellerConfirmed, setSellerConfirmed] = useState(false);
   const [sellerCurrentPoints, setSellerCurrentPoints] = useState(1_000_000);
-  const [buyerCurrentPoints, setBuyerCurrentPoints] = useState(0);
   const [sellerClickedNew, setSellerClickedNew] = useState(false);
-  const [buyerClickedNew, setBuyerClickedNew] = useState(false);
-  const [sellerSearchTimerSeconds, setSellerSearchTimerSeconds] = useState(600); // 10분, 판매자 AI매칭시작 시점부터
-  const [buyerSearchTimerSeconds, setBuyerSearchTimerSeconds] = useState(300);   // 5분, 구매자 AI매칭시작 시점부터
-  const [rejectReason, setRejectReason] = useState<string | null>(null); // 구매자 거부 사유 → 판매자 모달용
-  const [sellerRejectDepositReason, setSellerRejectDepositReason] = useState<string | null>(null); // 판매자 입금 거부 사유 → 구매자 모달용
-  const [violationHistory, setViolationHistory] = useState<Array<{ type: string; message: string }>>([]); // 취소·거부 위반내역
-  const [sellerMatchConfirmed, setSellerMatchConfirmed] = useState(false); // 매칭 확인 단계: 판매자 확인
-  const [buyerMatchConfirmed, setBuyerMatchConfirmed] = useState(false);   // 매칭 확인 단계: 구매자 확인
-  const [confirmTimerSeconds, setConfirmTimerSeconds] = useState(180);      // 매칭 확인 180초 타이머, 만료 시 취소
-  const amountsMatch = sellerAmount === buyerAmount && sellerAmount >= MIN_POINT_AMOUNT && buyerAmount >= MIN_POINT_AMOUNT;
+  const [sellerSearchTimerSeconds, setSellerSearchTimerSeconds] = useState(600);
+  const [rejectReason, setRejectReason] = useState<string | null>(null);
+  const [sellerRejectDepositReason, setSellerRejectDepositReason] = useState<string | null>(null);
+  const [sellerRejectDepositReasonBuyerIndex, setSellerRejectDepositReasonBuyerIndex] = useState<number | null>(null);
+  const [violationHistory, setViolationHistory] = useState<Array<{ type: string; message: string }>>([]);
+  const [sellerMatchConfirmed, setSellerMatchConfirmed] = useState(false);
+  const [confirmTimerSeconds, setConfirmTimerSeconds] = useState(180);
+  const [buyerSlots, setBuyerSlots] = useState<BuyerSlot[]>(() => [createInitialBuyerSlot(0)]);
+  const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
 
-  // 판매자: AI 매칭 시작 누른 시점에 10분 타이머 시작 (한 번만 600으로 설정)
+  const matchedSlot = matchedBuyerIndex !== null ? buyerSlots[matchedBuyerIndex] : null;
+  const buyerAmount = matchedSlot?.amount ?? 0;
+  const buyerDepositDone = matchedSlot?.depositDone ?? false;
+  const buyerMatchConfirmed = matchedSlot?.matchConfirmed ?? false;
+  const anyBuyerStarted = buyerSlots.some((s) => s.started);
+  const amountsMatch =
+    matchedSlot != null &&
+    sellerAmount === matchedSlot.amount &&
+    sellerAmount >= MIN_POINT_AMOUNT &&
+    matchedSlot.amount >= MIN_POINT_AMOUNT;
+
+  const setBuyerSlotAt = useCallback((index: number, updater: (prev: BuyerSlot) => BuyerSlot) => {
+    setBuyerSlots((prev) => prev.map((s, i) => (i === index ? updater(s) : s)));
+  }, []);
+
+  // 판매자: AI 매칭 시작 누른 시점에 10분 타이머 시작
   const prevSellerStarted = useRef(false);
   useEffect(() => {
     if (sellerStarted && !prevSellerStarted.current) setSellerSearchTimerSeconds(600);
@@ -174,197 +226,389 @@ export default function App() {
   useEffect(() => {
     if (!sellerStarted) return;
     if (phase !== 'idle' && phase !== 'searching' && phase !== 'confirming' && phase !== 'trading') return;
-    const id = setInterval(() => {
-      setSellerSearchTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    const id = setInterval(() => setSellerSearchTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => clearInterval(id);
   }, [sellerStarted, phase]);
 
-  // 구매자: AI 매칭 시작 누른 시점에 5분 타이머 시작 (한 번만 300으로 설정)
-  const prevBuyerStarted = useRef(false);
+  // 구매자별 타이머: started인 슬롯 중 매칭된 슬롯 또는 idle일 때 1초마다 감소
   useEffect(() => {
-    if (buyerStarted && !prevBuyerStarted.current) setBuyerSearchTimerSeconds(300);
-    prevBuyerStarted.current = buyerStarted;
-  }, [buyerStarted]);
-  useEffect(() => {
-    if (!buyerStarted) return;
-    if (phase !== 'idle' && phase !== 'searching' && phase !== 'confirming' && phase !== 'trading') return;
     const id = setInterval(() => {
-      setBuyerSearchTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+      setBuyerSlots((prev) =>
+        prev.map((s, i) => {
+          const isMatched = matchedBuyerIndex === i;
+          const active =
+            s.started &&
+            (phase === 'idle' || phase === 'searching' || phase === 'confirming' || phase === 'trading');
+          if (!active || (phase !== 'idle' && !isMatched)) return s;
+          return { ...s, searchTimerSeconds: s.searchTimerSeconds > 0 ? s.searchTimerSeconds - 1 : 0 };
+        })
+      );
     }, 1000);
     return () => clearInterval(id);
-  }, [buyerStarted, phase]);
+  }, [phase, matchedBuyerIndex]);
 
-  // 1) 양쪽 모두 'AI 매칭 시작'을 눌렀고 금액이 일치하면 → 바로 SEARCHING(홀로그램 그리드)
+  // 1) 판매자와 어느 한 구매자라도 금액·시작 일치하면 그 구매자와 SEARCHING
   useEffect(() => {
-    if (!sellerStarted || !buyerStarted || phase !== 'idle') return;
-    if (amountsMatch) {
-      setPhase('searching');
+    if (!sellerStarted || phase !== 'idle') return;
+    for (let i = 0; i < buyerSlots.length; i++) {
+      const slot = buyerSlots[i];
+      if (slot.started && sellerAmount === slot.amount && sellerAmount >= MIN_POINT_AMOUNT && slot.amount >= MIN_POINT_AMOUNT) {
+        setMatchedBuyerIndex(i);
+        setPhase('searching');
+        return;
+      }
     }
-  }, [sellerStarted, buyerStarted, amountsMatch, phase]);
+  }, [sellerStarted, phase, sellerAmount, buyerSlots]);
 
-  // 2) 양쪽이 모두 SEARCHING이 되면 2초 뒤 매칭 성사 → 확인 단계(confirming)로
+  // 2) SEARCHING 2초 뒤 매칭 성사 → confirming (buyerSlots 제외해 타이머가 매초 리셋되지 않도록)
+  const matchSearchRef = useRef({ sellerAmount: 0, matchedBuyerIndex: null as number | null, buyerSlots: [] as BuyerSlot[] });
+  matchSearchRef.current = { sellerAmount, matchedBuyerIndex, buyerSlots };
   useEffect(() => {
-    if (phase !== 'searching' || !sellerStarted || !buyerStarted || !amountsMatch) return;
+    if (phase !== 'searching' || matchedBuyerIndex === null) return;
+    const slot = buyerSlots[matchedBuyerIndex];
+    if (!sellerStarted || !slot?.started || sellerAmount !== slot.amount) return;
     const timer = setTimeout(() => {
-      const result = computeMatchResult(sellerAmount, buyerAmount, sellerSessionUser, buyerSessionUser);
+      const { sellerAmount: amt, matchedBuyerIndex: idx, buyerSlots: slots } = matchSearchRef.current;
+      if (idx === null) return;
+      const s = slots[idx];
+      if (!s) return;
+      const result = computeMatchResult(amt, s.amount, sellerSessionUser, s.user);
       setMatchResult(result);
       setPhase('confirming');
       setSellerMatchConfirmed(false);
-      setBuyerMatchConfirmed(false);
-      setBuyerDepositDone(false);
+      setBuyerSlotAt(idx, (prev) => ({ ...prev, depositDone: false, matchConfirmed: false }));
       setSellerConfirmed(false);
     }, MATCH_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [phase, sellerStarted, buyerStarted, amountsMatch, sellerAmount, buyerAmount]);
+  }, [phase, matchedBuyerIndex, setBuyerSlotAt]);
 
-  // 3) 양쪽 모두 매칭 확인을 누르면 거래(trading) 단계로
+  // 3) 양쪽 모두 매칭 확인 시 거래(trading) 단계
   useEffect(() => {
-    if (phase !== 'confirming' || !sellerMatchConfirmed || !buyerMatchConfirmed) return;
+    if (phase !== 'confirming' || matchedBuyerIndex === null || !sellerMatchConfirmed) return;
+    const slot = buyerSlots[matchedBuyerIndex];
+    if (!slot?.matchConfirmed) return;
     setPhase('trading');
     setSellerMatchConfirmed(false);
-    setBuyerMatchConfirmed(false);
-  }, [phase, sellerMatchConfirmed, buyerMatchConfirmed]);
+    setBuyerSlotAt(matchedBuyerIndex, (s) => ({ ...s, matchConfirmed: false }));
+  }, [phase, matchedBuyerIndex, sellerMatchConfirmed, buyerSlots, setBuyerSlotAt]);
 
   useEffect(() => {
-    if (phase !== 'trading' || !matchResult) return;
-    if (buyerDepositDone && sellerConfirmed) {
-      const total = matchResult.totalAmount;
-      const t = setTimeout(() => {
-        setPhase('completed');
-        setSellerCurrentPoints((prev) => prev - total);
-        setBuyerCurrentPoints((prev) => prev + total);
-      }, CONFIRM_DELAY_MS);
-      return () => clearTimeout(t);
-    }
-  }, [phase, matchResult, buyerDepositDone, sellerConfirmed]);
+    if (phase !== 'trading' || !matchResult || matchedBuyerIndex === null) return;
+    const slot = buyerSlots[matchedBuyerIndex];
+    if (!slot?.depositDone || !sellerConfirmed) return;
+    const total = matchResult.totalAmount;
+    const t = setTimeout(() => {
+      setPhase('completed');
+      setSellerCurrentPoints((prev) => prev - total);
+      setBuyerSlotAt(matchedBuyerIndex!, (s) => ({ ...s, currentPoints: s.currentPoints + total }));
+    }, CONFIRM_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [phase, matchResult, matchedBuyerIndex, buyerSlots, sellerConfirmed, setBuyerSlotAt]);
 
   const reset = useCallback(() => {
     setSellerAmount(0);
-    setBuyerAmount(0);
     setSellerStarted(false);
-    setBuyerStarted(false);
     setPhase('idle');
     setMatchResult(null);
-    setBuyerDepositDone(false);
     setSellerConfirmed(false);
     setSellerClickedNew(false);
-    setBuyerClickedNew(false);
     setSellerMatchConfirmed(false);
-    setBuyerMatchConfirmed(false);
+    setMatchedBuyerIndex(null);
+    setBuyerSlots((prev) =>
+      prev.map((s) => ({
+        ...s,
+        amount: 0,
+        started: false,
+        depositDone: false,
+        clickedNew: false,
+        matchConfirmed: false,
+        searchTimerSeconds: 300,
+      }))
+    );
   }, []);
 
-  /** 매칭 확인 단계: 판매자/구매자가 '거래 진행' 선택 */
+  /** 매칭 확인: 판매자 확인 */
   const handleSellerConfirmMatch = useCallback(() => setSellerMatchConfirmed(true), []);
-  const handleBuyerConfirmMatch = useCallback(() => setBuyerMatchConfirmed(true), []);
 
-  /** 매칭 확인 단계: 취소 시 초기 화면으로 (타이머 만료 또는 사용자 취소) */
+  /** 매칭 확인: 구매자 확인 (해당 슬롯) */
+  const handleBuyerConfirmMatch = useCallback(
+    (buyerIndex: number) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, matchConfirmed: true })),
+    [setBuyerSlotAt]
+  );
+
+  /** 매칭 확인 단계: 취소 시 초기 화면으로 */
   const handleDeclineMatch = useCallback(() => {
     setViolationHistory((prev) => [...prev, { type: '취소', message: '매칭 확인 시간 초과 또는 취소' }]);
     setSellerAmount(0);
-    setBuyerAmount(0);
     setPhase('idle');
     setMatchResult(null);
     setSellerStarted(false);
-    setBuyerStarted(false);
     setSellerMatchConfirmed(false);
-    setBuyerMatchConfirmed(false);
+    setMatchedBuyerIndex(null);
+    setBuyerSlots((prev) =>
+      prev.map((s) => ({
+        ...s,
+        amount: 0,
+        started: false,
+        depositDone: false,
+        clickedNew: false,
+        matchConfirmed: false,
+        searchTimerSeconds: 300,
+      }))
+    );
   }, []);
 
-  // 매칭 확인 180초 타이머: confirming 진입 시 180으로 설정, 1초마다 감소, 0이 되면 자동 취소
   useEffect(() => {
     if (phase !== 'confirming') return;
     setConfirmTimerSeconds(180);
-    const id = setInterval(() => {
-      setConfirmTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    const id = setInterval(() => setConfirmTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => clearInterval(id);
   }, [phase]);
   useEffect(() => {
-    if (phase === 'confirming' && confirmTimerSeconds === 0) {
-      handleDeclineMatch();
-    }
+    if (phase === 'confirming' && confirmTimerSeconds === 0) handleDeclineMatch();
   }, [phase, confirmTimerSeconds, handleDeclineMatch]);
 
-  /** 판매자가 '새 거래' 클릭 → 판매자만 새매칭 화면으로, 금액 0. 둘 다 눌렀으면 전체 초기화 */
+  /** 판매자 '새 거래' 클릭 */
   const handleSellerNewTrade = useCallback(() => {
     setSellerClickedNew(true);
     setSellerAmount(0);
     setSellerStarted(false);
-    if (buyerClickedNew) {
-      setBuyerAmount(0);
+    const matchedSlot = matchedBuyerIndex !== null ? buyerSlots[matchedBuyerIndex] : null;
+    if (matchedSlot?.clickedNew) {
       setPhase('idle');
       setMatchResult(null);
-      setBuyerDepositDone(false);
       setSellerConfirmed(false);
       setSellerClickedNew(false);
-      setBuyerClickedNew(false);
+      setMatchedBuyerIndex(null);
+      setBuyerSlots((prev) =>
+        prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: 300 }))
+      );
     }
-  }, [buyerClickedNew]);
+  }, [matchedBuyerIndex, buyerSlots]);
 
-  /** 구매자가 '새 거래' 클릭 → 구매자만 새매칭 화면으로, 금액 0. 둘 다 눌렀으면 전체 초기화 */
-  const handleBuyerNewTrade = useCallback(() => {
-    setBuyerClickedNew(true);
-    setBuyerAmount(0);
-    setBuyerStarted(false);
-    if (sellerClickedNew) {
+  /** 구매자 '새 거래' 클릭 (buyerIndex) */
+  const handleBuyerNewTrade = useCallback(
+    (buyerIndex: number) => {
+      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: 300 }));
+      if (sellerClickedNew && matchedBuyerIndex === buyerIndex) {
+        setPhase('idle');
+        setMatchResult(null);
+        setSellerConfirmed(false);
+        setSellerClickedNew(false);
+        setMatchedBuyerIndex(null);
+        setBuyerSlots((prev) =>
+          prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: 300 }))
+        );
+      }
+    },
+    [sellerClickedNew, matchedBuyerIndex, setBuyerSlotAt]
+  );
+
+  /** 구매자 거부 → 매칭 취소, 판매자에게 사유 모달 */
+  const handleRejectMatch = useCallback(
+    (buyerIndex: number, reason: string) => {
+      setViolationHistory((prev) => [...prev, { type: '거부', message: `구매자 거부: ${reason}` }]);
+      setRejectReason(reason);
       setSellerAmount(0);
       setPhase('idle');
       setMatchResult(null);
-      setBuyerDepositDone(false);
+      setSellerStarted(false);
       setSellerConfirmed(false);
-      setSellerClickedNew(false);
-      setBuyerClickedNew(false);
-    }
-  }, [sellerClickedNew]);
+      setMatchedBuyerIndex(null);
+      setBuyerSlots((prev) =>
+        prev.map((s, i) =>
+          i === buyerIndex
+            ? { ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: 300 }
+            : s
+        )
+      );
+    },
+    []
+  );
 
-  /** 구매자가 거부 사유 선택 후 확인 → 사유 저장, 매칭 취소 후 판매자에게 사유 모달 표시 */
-  const handleRejectMatch = useCallback((reason: string) => {
-    setViolationHistory((prev) => [...prev, { type: '거부', message: `구매자 거부: ${reason}` }]);
-    setRejectReason(reason);
-    setSellerAmount(0);
-    setBuyerAmount(0);
-    setPhase('idle');
-    setMatchResult(null);
-    setBuyerDepositDone(false);
-    setSellerConfirmed(false);
-    setSellerStarted(false);
-    setBuyerStarted(false);
-  }, []);
+  const clearRejectReason = useCallback(() => setRejectReason(null), []);
 
-  /** 판매자가 거부 사유 모달에서 확인 → 사유 초기화 */
-  const clearRejectReason = useCallback(() => {
-    setRejectReason(null);
-  }, []);
-
-  /** 판매자가 입금 확인 거부(사유 선택 후 확인) → 사유를 구매자에게 표시, 둘 다 첫화면·포인트 입력 0 */
+  /** 판매자 입금 거부 → 해당 구매자에게만 사유 표시 */
   const handleSellerRejectDeposit = useCallback((reason: string) => {
+    const idx = matchedBuyerIndex;
     setViolationHistory((prev) => [...prev, { type: '거부', message: `판매자 입금 거부: ${reason}` }]);
     setSellerRejectDepositReason(reason);
+    setSellerRejectDepositReasonBuyerIndex(idx);
     setPhase('idle');
     setMatchResult(null);
     setSellerStarted(false);
-    setBuyerStarted(false);
-    setBuyerDepositDone(false);
     setSellerConfirmed(false);
+    setMatchedBuyerIndex(null);
+    setBuyerSlots((prev) =>
+      prev.map((s, i) =>
+        i === idx ? { ...s, amount: 0, started: false, depositDone: false, searchTimerSeconds: 300 } : s
+      )
+    );
     setSellerAmount(0);
-    setBuyerAmount(0);
+  }, [matchedBuyerIndex]);
+  const clearSellerRejectDepositReason = useCallback(() => {
+    setSellerRejectDepositReason(null);
+    setSellerRejectDepositReasonBuyerIndex(null);
   }, []);
-  const clearSellerRejectDepositReason = useCallback(() => setSellerRejectDepositReason(null), []);
+
+  /** 새 구매자 화면 추가 (최대 5개) */
+  const addBuyerSlot = useCallback(() => {
+    setBuyerSlots((prev) => {
+      if (prev.length >= MAX_BUYERS) return prev;
+      return [...prev, createInitialBuyerSlot(prev.length)];
+    });
+  }, []);
+
+  /** 추가된 구매자 화면 삭제 (1번은 유지, 2~5번만 삭제 가능) */
+  const removeBuyerSlot = useCallback((buyerIndex: number) => {
+    if (buyerIndex < 1) return;
+    setBuyerSlots((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((_, i) => i !== buyerIndex);
+      return next;
+    });
+    setMatchedBuyerIndex((current) => {
+      if (current === null) return null;
+      if (current === buyerIndex) return null;
+      if (current > buyerIndex) return current - 1;
+      return current;
+    });
+    if (matchedBuyerIndex === buyerIndex) {
+      setPhase('idle');
+      setMatchResult(null);
+      setSellerMatchConfirmed(false);
+      setSellerAmount(0);
+      setSellerStarted(false);
+      setSellerConfirmed(false);
+    }
+  }, [matchedBuyerIndex]);
 
   const sellerDisplayPoints = sellerCurrentPoints;
-  const buyerDisplayPoints = buyerCurrentPoints;
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center mesh-bg py-4 px-3 sm:py-6 sm:px-4 md:py-8 lg:py-10 lg:px-4 overflow-auto scrollbar-hide">
       <h1 className="text-slate-300/90 text-xs sm:text-sm font-display font-medium tracking-[0.15em] sm:tracking-[0.2em] mb-4 sm:mb-6 lg:mb-8">실시간 매칭 시뮬레이터</h1>
       <div className="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 xl:gap-16 w-full max-w-[1800px]">
-        {/* 왼쪽 아이폰: 판매자 */}
+        {/* 구매자 화면 1 (제목 "1" 옆에 + 버튼, 주황 테마) */}
+        <IPhoneFrame
+          variant="buyer"
+          title="구매자 화면 1"
+          titleAction={
+            buyerSlots.length < MAX_BUYERS ? (
+              <button
+                type="button"
+                onClick={addBuyerSlot}
+                className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-slate-500/60 hover:border-orange-400/70 hover:bg-slate-700/50 text-slate-400 hover:text-orange-400 flex items-center justify-center text-base font-light transition-all duration-200"
+                aria-label="구매자 화면 추가"
+                title="구매자 추가"
+              >
+                +
+              </button>
+            ) : undefined
+          }
+        >
+          <BuyerPhoneContent
+            buyerIndex={0}
+            phase={phase}
+            buyerStarted={buyerSlots[0].started}
+            sellerStarted={sellerStarted}
+            amountsMatch={matchedBuyerIndex === 0 && amountsMatch}
+            buyerAmount={buyerSlots[0].amount}
+            setBuyerAmount={(n) => setBuyerSlotAt(0, (s) => ({ ...s, amount: n }))}
+            minPointAmount={MIN_POINT_AMOUNT}
+            setBuyerStarted={() =>
+              setBuyerSlotAt(0, (s) => ({ ...s, started: true, searchTimerSeconds: 300 }))
+            }
+            matchResult={matchedBuyerIndex === 0 ? matchResult : null}
+            buyerDepositDone={buyerSlots[0].depositDone}
+            setBuyerDepositDone={(b) => setBuyerSlotAt(0, (s) => ({ ...s, depositDone: b }))}
+            displayPoints={buyerSlots[0].currentPoints}
+            completed={phase === 'completed' && matchedBuyerIndex === 0}
+            onReset={reset}
+            buyerClickedNew={buyerSlots[0].clickedNew}
+            onNewTrade={() => handleBuyerNewTrade(0)}
+            buyerSearchTimerSeconds={buyerSlots[0].searchTimerSeconds}
+            onRejectMatch={(reason) => handleRejectMatch(0, reason)}
+            rejectReasonOptions={['계좌번호 불일치', '입금자명 불일치', '은행 정검시간']}
+            matchConfirming={phase === 'confirming' && matchedBuyerIndex === 0}
+            sellerMatchConfirmed={sellerMatchConfirmed}
+            buyerMatchConfirmed={buyerSlots[0].matchConfirmed}
+            onConfirmMatch={() => handleBuyerConfirmMatch(0)}
+            onDeclineMatch={handleDeclineMatch}
+            confirmTimerSeconds={confirmTimerSeconds}
+            sellerRejectDepositReason={
+              sellerRejectDepositReasonBuyerIndex === 0 ? sellerRejectDepositReason : null
+            }
+            onClearSellerRejectDepositReason={clearSellerRejectDepositReason}
+            violationHistory={violationHistory}
+            memberId={buyerSlots[0].user.id}
+          />
+        </IPhoneFrame>
+        {/* 구매자 화면 2~5 (제목 옆에 - 삭제 버튼) */}
+        {buyerSlots.slice(1).map((slot, i) => {
+          const buyerIndex = i + 1;
+          return (
+            <IPhoneFrame
+              variant="buyer"
+              key={buyerIndex}
+              title={`구매자 화면 ${buyerIndex + 1}`}
+              titleAction={
+                <button
+                  type="button"
+                  onClick={() => removeBuyerSlot(buyerIndex)}
+                  className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-slate-500/60 hover:border-red-400/70 hover:bg-slate-700/50 text-slate-400 hover:text-red-400 flex items-center justify-center text-base font-light transition-all duration-200"
+                  aria-label="구매자 화면 삭제"
+                  title="구매자 삭제"
+                >
+                  −
+                </button>
+              }
+            >
+              <BuyerPhoneContent
+                buyerIndex={buyerIndex}
+                phase={phase}
+                buyerStarted={slot.started}
+                sellerStarted={sellerStarted}
+                amountsMatch={matchedBuyerIndex === buyerIndex && amountsMatch}
+                buyerAmount={slot.amount}
+                setBuyerAmount={(n) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: n }))}
+                minPointAmount={MIN_POINT_AMOUNT}
+                setBuyerStarted={() =>
+                  setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: true, searchTimerSeconds: 300 }))
+                }
+                matchResult={matchedBuyerIndex === buyerIndex ? matchResult : null}
+                buyerDepositDone={slot.depositDone}
+                setBuyerDepositDone={(b) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, depositDone: b }))}
+                displayPoints={slot.currentPoints}
+                completed={phase === 'completed' && matchedBuyerIndex === buyerIndex}
+                onReset={reset}
+                buyerClickedNew={slot.clickedNew}
+                onNewTrade={() => handleBuyerNewTrade(buyerIndex)}
+                buyerSearchTimerSeconds={slot.searchTimerSeconds}
+                onRejectMatch={(reason) => handleRejectMatch(buyerIndex, reason)}
+                rejectReasonOptions={['계좌번호 불일치', '입금자명 불일치', '은행 정검시간']}
+                matchConfirming={phase === 'confirming' && matchedBuyerIndex === buyerIndex}
+                sellerMatchConfirmed={sellerMatchConfirmed}
+                buyerMatchConfirmed={slot.matchConfirmed}
+                onConfirmMatch={() => handleBuyerConfirmMatch(buyerIndex)}
+                onDeclineMatch={handleDeclineMatch}
+                confirmTimerSeconds={confirmTimerSeconds}
+                sellerRejectDepositReason={
+                  sellerRejectDepositReasonBuyerIndex === buyerIndex ? sellerRejectDepositReason : null
+                }
+                onClearSellerRejectDepositReason={clearSellerRejectDepositReason}
+                violationHistory={violationHistory}
+                memberId={slot.user.id}
+              />
+            </IPhoneFrame>
+          );
+        })}
+        {/* 판매자 화면 */}
         <IPhoneFrame title="판매자 화면">
           <SellerPhoneContent
             phase={phase}
             sellerStarted={sellerStarted}
-            buyerStarted={buyerStarted}
+            buyerStarted={anyBuyerStarted}
             amountsMatch={amountsMatch}
             sellerAmount={sellerAmount}
             setSellerAmount={setSellerAmount}
@@ -390,40 +634,7 @@ export default function App() {
             confirmTimerSeconds={confirmTimerSeconds}
             onRejectDeposit={handleSellerRejectDeposit}
             violationHistory={violationHistory}
-          />
-        </IPhoneFrame>
-
-        {/* 오른쪽 아이폰: 구매자 */}
-        <IPhoneFrame title="구매자 화면">
-          <BuyerPhoneContent
-            phase={phase}
-            buyerStarted={buyerStarted}
-            sellerStarted={sellerStarted}
-            amountsMatch={amountsMatch}
-            buyerAmount={buyerAmount}
-            setBuyerAmount={setBuyerAmount}
-            minPointAmount={MIN_POINT_AMOUNT}
-            setBuyerStarted={setBuyerStarted}
-            matchResult={matchResult}
-            buyerDepositDone={buyerDepositDone}
-            setBuyerDepositDone={setBuyerDepositDone}
-            displayPoints={buyerDisplayPoints}
-            completed={phase === 'completed'}
-            onReset={reset}
-            buyerClickedNew={buyerClickedNew}
-            onNewTrade={handleBuyerNewTrade}
-            buyerSearchTimerSeconds={buyerSearchTimerSeconds}
-            onRejectMatch={handleRejectMatch}
-            rejectReasonOptions={['계좌번호 불일치', '입금자명 불일치', '은행 정검시간']}
-            matchConfirming={phase === 'confirming'}
-            sellerMatchConfirmed={sellerMatchConfirmed}
-            buyerMatchConfirmed={buyerMatchConfirmed}
-            onConfirmMatch={handleBuyerConfirmMatch}
-            onDeclineMatch={handleDeclineMatch}
-            confirmTimerSeconds={confirmTimerSeconds}
-            sellerRejectDepositReason={sellerRejectDepositReason}
-            onClearSellerRejectDepositReason={clearSellerRejectDepositReason}
-            violationHistory={violationHistory}
+            memberId={sellerSessionUser.id}
           />
         </IPhoneFrame>
       </div>
@@ -460,6 +671,7 @@ function SellerPhoneContent({
   confirmTimerSeconds,
   onRejectDeposit,
   violationHistory,
+  memberId,
 }: {
   phase: SimPhase;
   sellerStarted: boolean;
@@ -489,6 +701,7 @@ function SellerPhoneContent({
   confirmTimerSeconds: number;
   onRejectDeposit: (reason: string) => void;
   violationHistory: Array<{ type: string; message: string }>;
+  memberId: string;
 }) {
   void onReset, onDeclineMatch; // reserve for future use
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -513,12 +726,15 @@ function SellerPhoneContent({
 
   return (
     <div className="relative min-h-full flex flex-col transition-all duration-300 ease-out">
-      {/* 모든 화면에서 고정: 오른쪽 상단 위반내역 영역 */}
-      <div className="flex-shrink-0 h-10 flex items-center justify-end px-2">
+      {/* 모든 화면에서 고정: 회원아이디 + 위반내역 영역 (다중 매칭 구분용) */}
+      <div className="flex-shrink-0 h-10 flex items-center justify-between gap-2 px-2">
+        <span className="text-slate-400 text-[10px] sm:text-xs font-display font-bold truncate min-w-0" title={memberId}>
+          회원아이디 {memberId}
+        </span>
         <button
           type="button"
           onClick={() => setShowViolationModal(true)}
-          className="py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border border-slate-600/60 hover:border-cyan-500/50 bg-slate-800/80 transition-colors"
+          className="flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border border-slate-600/60 hover:border-cyan-500/50 bg-slate-800/80 transition-colors"
         >
           위반내역
         </button>
@@ -814,6 +1030,7 @@ function SellerPhoneContent({
 }
 
 function BuyerPhoneContent({
+  buyerIndex: _buyerIndex,
   phase,
   buyerStarted,
   sellerStarted,
@@ -842,7 +1059,9 @@ function BuyerPhoneContent({
   sellerRejectDepositReason,
   onClearSellerRejectDepositReason,
   violationHistory,
+  memberId,
 }: {
+  buyerIndex?: number;
   phase: SimPhase;
   buyerStarted: boolean;
   sellerStarted: boolean;
@@ -850,8 +1069,8 @@ function BuyerPhoneContent({
   buyerAmount: number;
   setBuyerAmount: (n: number) => void;
   minPointAmount: number;
-  setBuyerStarted: (b: boolean) => void;
-  matchResult: ReturnType<typeof computeMatchResult>;
+  setBuyerStarted: (b?: boolean) => void;
+  matchResult: ReturnType<typeof computeMatchResult> | null;
   buyerDepositDone: boolean;
   setBuyerDepositDone: (b: boolean) => void;
   displayPoints: number;
@@ -871,6 +1090,7 @@ function BuyerPhoneContent({
   sellerRejectDepositReason: string | null;
   onClearSellerRejectDepositReason: () => void;
   violationHistory: Array<{ type: string; message: string }>;
+  memberId: string;
 }) {
   void onReset, onDeclineMatch; // reserve for future use
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -892,12 +1112,15 @@ function BuyerPhoneContent({
 
   return (
     <div className="relative min-h-full flex flex-col transition-all duration-300 ease-out">
-      {/* 모든 화면에서 고정: 오른쪽 상단 위반내역 영역 */}
-      <div className="flex-shrink-0 h-10 flex items-center justify-end px-2">
+      {/* 모든 화면에서 고정: 회원아이디 + 위반내역 영역 (다중 매칭 구분용) */}
+      <div className="flex-shrink-0 h-10 flex items-center justify-between gap-2 px-2">
+        <span className="text-slate-400 text-[10px] sm:text-xs font-display font-bold truncate min-w-0" title={memberId}>
+          회원아이디 {memberId}
+        </span>
         <button
           type="button"
           onClick={() => setShowViolationModal(true)}
-          className="py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border border-slate-600/60 hover:border-cyan-500/50 bg-slate-800/80 transition-colors"
+          className="flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border border-slate-600/60 hover:border-cyan-500/50 bg-slate-800/80 transition-colors"
         >
           위반내역
         </button>

@@ -22,16 +22,40 @@ export const sellerSessionUser: User = {
   points: 120000,
 };
 
-/** 우측 구매자 세션용 사용자 */
+/** 우측 구매자 세션용 사용자 (1번째 구매자) */
 export const buyerSessionUser: User = {
   id: 'buyer-1',
   name: '김은성',
   creditScore: 850,
   bank: '카카오뱅크',
-  accountNumber: '3333543543534',
+  accountNumber: '3333-543-543534',
   holder: '김은성',
   points: 50000,
 };
+
+/** 추가 구매자용 템플릿 (2~5번째 구매자) - 은행명, 계좌번호, 예금주 */
+const additionalBuyerTemplates: Array<{ bank: string; accountNumber: string; holder: string; name: string }> = [
+  { bank: '신한은행', accountNumber: '110-234-567890', holder: '이구매', name: '이구매' },
+  { bank: '국민은행', accountNumber: '123-456-789012', holder: '박소비', name: '박소비' },
+  { bank: 'NH농협', accountNumber: '302-1234-5678-12', holder: '최민수', name: '최민수' },
+  { bank: '케이뱅크', accountNumber: '400-1234-567890', holder: '정다희', name: '정다희' },
+];
+
+/** 새 구매자 화면용 User 생성 (index 0 = 기존 buyerSessionUser, 1~4 = 추가 구매자) */
+export function createBuyerUserForIndex(index: number): User {
+  if (index === 0) return buyerSessionUser;
+  const t = additionalBuyerTemplates[index - 1];
+  if (!t) return buyerSessionUser;
+  return {
+    id: `buyer-${index + 1}`,
+    name: t.name,
+    creditScore: 800 + Math.floor(Math.random() * 50),
+    bank: t.bank,
+    accountNumber: t.accountNumber,
+    holder: t.holder,
+    points: 50000,
+  };
+}
 
 const sellerPool: Omit<Participant, 'amount'>[] = [
   { id: 's1', name: '이판매', creditScore: 920, bank: '△△은행', account: '987-654-321098', holder: '이판매' },
