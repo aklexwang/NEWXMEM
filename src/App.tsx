@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { sellerSessionUser, buyerSessionUser, createBuyerUserForIndex } from './data/matchMock';
+import { sellerSessionUser, createBuyerUserForIndex } from './data/matchMock';
 import type { User } from './types';
 import { computeMatchResult } from './data/matchMock';
 
@@ -203,7 +203,6 @@ export default function App() {
   const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
 
   const matchedSlot = matchedBuyerIndex !== null ? buyerSlots[matchedBuyerIndex] : null;
-  const buyerAmount = matchedSlot?.amount ?? 0;
   const buyerDepositDone = matchedSlot?.depositDone ?? false;
   const buyerMatchConfirmed = matchedSlot?.matchConfirmed ?? false;
   const anyBuyerStarted = buyerSlots.some((s) => s.started);
