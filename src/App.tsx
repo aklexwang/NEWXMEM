@@ -185,6 +185,8 @@ function useCountUp(end: number, start: number, active: boolean) {
 
 export default function App() {
   const MIN_POINT_AMOUNT = 10_000;
+  /** 만원 단위만 허용 (10,000 / 20,000 / 30,000 ...). 12,000원, 10,500원 등 불가 */
+  const isValidAmount = (n: number) => n >= MIN_POINT_AMOUNT && n % 10_000 === 0;
   const [sellerAmount, setSellerAmount] = useState(0);
   const [sellerStarted, setSellerStarted] = useState(false);
   const [phase, setPhase] = useState<SimPhase>('idle');
@@ -209,8 +211,8 @@ export default function App() {
   const amountsMatch =
     matchedSlot != null &&
     sellerAmount === matchedSlot.amount &&
-    sellerAmount >= MIN_POINT_AMOUNT &&
-    matchedSlot.amount >= MIN_POINT_AMOUNT;
+    isValidAmount(sellerAmount) &&
+    isValidAmount(matchedSlot.amount);
 
   const setBuyerSlotAt = useCallback((index: number, updater: (prev: BuyerSlot) => BuyerSlot) => {
     setBuyerSlots((prev) => prev.map((s, i) => (i === index ? updater(s) : s)));
@@ -251,7 +253,7 @@ export default function App() {
     if (!sellerStarted || phase !== 'idle') return;
     for (let i = 0; i < buyerSlots.length; i++) {
       const slot = buyerSlots[i];
-      if (slot.started && sellerAmount === slot.amount && sellerAmount >= MIN_POINT_AMOUNT && slot.amount >= MIN_POINT_AMOUNT) {
+      if (slot.started && sellerAmount === slot.amount && isValidAmount(sellerAmount) && isValidAmount(slot.amount)) {
         setMatchedBuyerIndex(i);
         setPhase('searching');
         return;
@@ -291,18 +293,26 @@ export default function App() {
     setBuyerSlotAt(matchedBuyerIndex, (s) => ({ ...s, matchConfirmed: false }));
   }, [phase, matchedBuyerIndex, sellerMatchConfirmed, buyerSlots, setBuyerSlotAt]);
 
+  // trading → completed: buyerSlots 의존 제거해 타이머가 1초마다 리셋되지 않도록
+  const tradingCompleteRef = useRef({ buyerSlots, matchedBuyerIndex, sellerConfirmed });
+  tradingCompleteRef.current = { buyerSlots, matchedBuyerIndex, sellerConfirmed };
   useEffect(() => {
     if (phase !== 'trading' || !matchResult || matchedBuyerIndex === null) return;
     const slot = buyerSlots[matchedBuyerIndex];
     if (!slot?.depositDone || !sellerConfirmed) return;
     const total = matchResult.totalAmount;
+    const idx = matchedBuyerIndex;
     const t = setTimeout(() => {
+      const { buyerSlots: slots, sellerConfirmed: confirmed } = tradingCompleteRef.current;
+      if (!confirmed || idx === null) return;
+      const s = slots[idx];
+      if (!s?.depositDone) return;
       setPhase('completed');
       setSellerCurrentPoints((prev) => prev - total);
-      setBuyerSlotAt(matchedBuyerIndex!, (s) => ({ ...s, currentPoints: s.currentPoints + total }));
+      setBuyerSlotAt(idx, (prev) => ({ ...prev, currentPoints: prev.currentPoints + total }));
     }, CONFIRM_DELAY_MS);
     return () => clearTimeout(t);
-  }, [phase, matchResult, matchedBuyerIndex, buyerSlots, sellerConfirmed, setBuyerSlotAt]);
+  }, [phase, matchResult, matchedBuyerIndex, sellerConfirmed, setBuyerSlotAt]);
 
   const reset = useCallback(() => {
     setSellerAmount(0);
@@ -515,6 +525,7 @@ export default function App() {
             buyerAmount={buyerSlots[0].amount}
             setBuyerAmount={(n) => setBuyerSlotAt(0, (s) => ({ ...s, amount: n }))}
             minPointAmount={MIN_POINT_AMOUNT}
+            isValidAmount={isValidAmount(buyerSlots[0].amount)}
             setBuyerStarted={() =>
               setBuyerSlotAt(0, (s) => ({ ...s, started: true, searchTimerSeconds: 300 }))
             }
@@ -572,6 +583,7 @@ export default function App() {
                 buyerAmount={slot.amount}
                 setBuyerAmount={(n) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: n }))}
                 minPointAmount={MIN_POINT_AMOUNT}
+                isValidAmount={isValidAmount(slot.amount)}
                 setBuyerStarted={() =>
                   setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: true, searchTimerSeconds: 300 }))
                 }
@@ -612,6 +624,7 @@ export default function App() {
             sellerAmount={sellerAmount}
             setSellerAmount={setSellerAmount}
             minPointAmount={MIN_POINT_AMOUNT}
+            isValidAmount={isValidAmount(sellerAmount)}
             setSellerStarted={setSellerStarted}
             matchResult={matchResult}
             buyerDepositDone={buyerDepositDone}
@@ -649,6 +662,7 @@ function SellerPhoneContent({
   sellerAmount,
   setSellerAmount,
   minPointAmount,
+  isValidAmount,
   setSellerStarted,
   matchResult,
   buyerDepositDone,
@@ -679,6 +693,7 @@ function SellerPhoneContent({
   sellerAmount: number;
   setSellerAmount: (n: number) => void;
   minPointAmount: number;
+  isValidAmount: boolean;
   setSellerStarted: (b: boolean) => void;
   matchResult: ReturnType<typeof computeMatchResult>;
   buyerDepositDone: boolean;
@@ -708,6 +723,8 @@ function SellerPhoneContent({
   const [showSellerRejectModal, setShowSellerRejectModal] = useState(false);
   const [sellerRejectReason, setSellerRejectReason] = useState<string | null>(null);
   const [showViolationModal, setShowViolationModal] = useState(false);
+  const [lastSeenViolationCount, setLastSeenViolationCount] = useState(0);
+  const hasNewViolations = violationHistory.length > lastSeenViolationCount;
   const countUp = useCountUp(displayPoints, displayPoints + (matchResult?.totalAmount ?? 0), completed);
 
   const sellerRejectReasonOptions = ['입금금액 불일치', '미입금', '입금정보 불일치'];
@@ -732,8 +749,11 @@ function SellerPhoneContent({
         </span>
         <button
           type="button"
-          onClick={() => setShowViolationModal(true)}
-          className="flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border border-slate-600/60 hover:border-cyan-500/50 bg-slate-800/80 transition-colors"
+          onClick={() => {
+            setShowViolationModal(true);
+            setLastSeenViolationCount(violationHistory.length);
+          }}
+          className={`flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border bg-slate-800/80 transition-colors ${hasNewViolations ? 'animate-violation-btn-blink border-red-400/60' : 'border-slate-600/60 hover:border-cyan-500/50'}`}
         >
           위반내역
         </button>
@@ -773,7 +793,7 @@ function SellerPhoneContent({
             </section>
             <section className="py-4">
               <label className="block text-slate-400 text-xs mb-2 font-display tracking-wider">판매 포인트</label>
-              <div className="flex items-center h-14 rounded-xl overflow-hidden border border-slate-600/60 bg-slate-800/60 transition-all duration-300 input-wrap-glow focus-within:border-cyan-400/60 focus-within:shadow-[0_0_0_2px_rgba(6,182,212,0.2),0_0_24px_rgba(6,182,212,0.2)]">
+              <div className={`flex items-center h-14 rounded-xl overflow-hidden border bg-slate-800/60 transition-all duration-300 ${hasNewViolations ? 'border-amber-500/50 opacity-75 pointer-events-none' : 'border-slate-600/60 input-wrap-glow focus-within:border-cyan-400/60 focus-within:shadow-[0_0_0_2px_rgba(6,182,212,0.2),0_0_24px_rgba(6,182,212,0.2)]'}`}>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -783,13 +803,13 @@ function SellerPhoneContent({
                     const raw = e.target.value.replace(/\D/g, '');
                     setSellerAmount(raw === '' ? 0 : Math.min(999_999_999, Number(raw)));
                   }}
-                  className="flex-1 min-w-0 h-full px-4 bg-transparent text-slate-100 text-base border-none outline-none placeholder:text-slate-500 font-display text-right"
+                  disabled={hasNewViolations}
+                  className="flex-1 min-w-0 h-full px-4 bg-transparent text-slate-100 text-base border-none outline-none placeholder:text-slate-500 font-display text-right disabled:cursor-not-allowed"
                 />
                 <span className="text-slate-400 text-sm pr-4">원</span>
               </div>
-              {sellerAmount > 0 && sellerAmount < 10000 && (
-                <p className="sr-only text-xs font-display">10,000부터 가능합니다.</p>
-              )}
+              <p className="text-slate-500 text-xs font-display mt-1.5">만원 단위만 가능합니다.</p>
+              {hasNewViolations && <p className="text-amber-400/90 text-xs font-display mt-1">위반내역을 확인한 후 입력 가능합니다.</p>}
             </section>
             <section className="py-4 mt-[1cm] flex flex-col items-center">
               <AIBot />
@@ -798,8 +818,8 @@ function SellerPhoneContent({
           <section className="mt-auto pt-4 pb-[0.5cm]">
             <button
               type="button"
-              disabled={sellerAmount < minPointAmount}
-              onClick={() => sellerAmount >= minPointAmount && setSellerStarted(true)}
+              disabled={hasNewViolations || !isValidAmount}
+              onClick={() => isValidAmount && setSellerStarted(true)}
               className="btn-primary w-full text-sm h-14 font-display rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               AI 매칭 시작
@@ -814,6 +834,9 @@ function SellerPhoneContent({
           </p>
           <p className="text-slate-300 text-xs font-display tracking-wider">매칭자를 찾고 있습니다...</p>
           <HologramGrid />
+          <p className="text-point-glow text-sm font-display tracking-wider mt-1">
+            판매 금액 {sellerAmount.toLocaleString('ko-KR')} 원
+          </p>
           {phase === 'completed' && sellerClickedNew && <p className="text-slate-500 text-xs mt-2">구매자도 새 거래를 눌러 주세요</p>}
           {phase !== 'completed' && buyerStarted && !amountsMatch && <p className="text-amber-400/90 text-xs mt-2">금액을 동일하게 맞춰 주세요</p>}
         </div>
@@ -822,7 +845,10 @@ function SellerPhoneContent({
         <div className="opacity-0 animate-fade-in flex flex-col flex-1 min-h-0 h-full min-h-[320px] sm:min-h-[420px] py-4 sm:py-6">
           <div className="space-y-4 flex-shrink-0">
             <div className="glass-card-neon p-4 leading-relaxed">
-              <p className="text-slate-400 text-xs mb-1 font-display tracking-wider">매칭 금액</p>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-slate-400 text-xs font-display tracking-wider">매칭 금액</p>
+                <p className="text-slate-500 text-xs font-display font-bold">거래ID {matchResult.buyers[0]?.id ?? '-'}</p>
+              </div>
               <p className="text-point-glow text-2xl tracking-wider drop-shadow-[0_0_12px_rgba(0,255,255,0.5)]">{matchResult.totalAmount.toLocaleString('ko-KR')} 원</p>
               <p className="text-slate-400 text-xs mt-2">구매자 확인 {buyerMatchConfirmed ? '완료' : '대기 중...'}</p>
             </div>
@@ -1037,6 +1063,7 @@ function BuyerPhoneContent({
   buyerAmount,
   setBuyerAmount,
   minPointAmount,
+  isValidAmount,
   setBuyerStarted,
   matchResult,
   buyerDepositDone,
@@ -1068,6 +1095,7 @@ function BuyerPhoneContent({
   buyerAmount: number;
   setBuyerAmount: (n: number) => void;
   minPointAmount: number;
+  isValidAmount: boolean;
   setBuyerStarted: (b?: boolean) => void;
   matchResult: ReturnType<typeof computeMatchResult> | null;
   buyerDepositDone: boolean;
@@ -1097,6 +1125,8 @@ function BuyerPhoneContent({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedRejectReason, setSelectedRejectReason] = useState<string | null>(null);
   const [showViolationModal, setShowViolationModal] = useState(false);
+  const [lastSeenViolationCount, setLastSeenViolationCount] = useState(0);
+  const hasNewViolations = violationHistory.length > lastSeenViolationCount;
   const countUp = useCountUp(displayPoints, displayPoints - (matchResult?.totalAmount ?? 0), completed);
   const displayValue = completed ? countUp : displayPoints;
 
@@ -1118,8 +1148,11 @@ function BuyerPhoneContent({
         </span>
         <button
           type="button"
-          onClick={() => setShowViolationModal(true)}
-          className="flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border border-slate-600/60 hover:border-cyan-500/50 bg-slate-800/80 transition-colors"
+          onClick={() => {
+            setShowViolationModal(true);
+            setLastSeenViolationCount(violationHistory.length);
+          }}
+          className={`flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border bg-slate-800/80 transition-colors ${hasNewViolations ? 'animate-violation-btn-blink border-red-400/60' : 'border-slate-600/60 hover:border-cyan-500/50'}`}
         >
           위반내역
         </button>
@@ -1175,7 +1208,7 @@ function BuyerPhoneContent({
             </section>
             <section className="py-4">
               <label className="block text-slate-400 text-xs mb-2 font-display tracking-wider">구매포인트</label>
-              <div className="flex items-center h-14 rounded-xl overflow-hidden border border-slate-600/60 bg-slate-800/60 transition-all duration-300 input-wrap-glow focus-within:border-cyan-400/60 focus-within:shadow-[0_0_0_2px_rgba(6,182,212,0.2),0_0_24px_rgba(6,182,212,0.2)]">
+              <div className={`flex items-center h-14 rounded-xl overflow-hidden border bg-slate-800/60 transition-all duration-300 ${hasNewViolations ? 'border-amber-500/50 opacity-75 pointer-events-none' : 'border-slate-600/60 input-wrap-glow focus-within:border-cyan-400/60 focus-within:shadow-[0_0_0_2px_rgba(6,182,212,0.2),0_0_24px_rgba(6,182,212,0.2)]'}`}>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -1185,13 +1218,13 @@ function BuyerPhoneContent({
                     const raw = e.target.value.replace(/\D/g, '');
                     setBuyerAmount(raw === '' ? 0 : Math.min(999_999_999, Number(raw)));
                   }}
-                  className="flex-1 min-w-0 h-full px-4 bg-transparent text-slate-100 text-base border-none outline-none placeholder:text-slate-500 font-display text-right"
+                  disabled={hasNewViolations}
+                  className="flex-1 min-w-0 h-full px-4 bg-transparent text-slate-100 text-base border-none outline-none placeholder:text-slate-500 font-display text-right disabled:cursor-not-allowed"
                 />
                 <span className="text-slate-400 text-sm pr-4">원</span>
               </div>
-              {buyerAmount > 0 && buyerAmount < 10000 && (
-                <p className="sr-only text-xs font-display">10,000부터 가능합니다.</p>
-              )}
+              <p className="text-slate-500 text-xs font-display mt-1.5">만원 단위만 가능합니다.</p>
+              {hasNewViolations && <p className="text-amber-400/90 text-xs font-display mt-1">위반내역을 확인한 후 입력 가능합니다.</p>}
             </section>
             <section className="py-4 mt-[1cm] flex flex-col items-center">
               <AIBot />
@@ -1200,8 +1233,8 @@ function BuyerPhoneContent({
           <section className="mt-auto pt-4 pb-[0.5cm]">
             <button
               type="button"
-              disabled={buyerAmount < minPointAmount}
-              onClick={() => buyerAmount >= minPointAmount && setBuyerStarted(true)}
+              disabled={hasNewViolations || !isValidAmount}
+              onClick={() => isValidAmount && setBuyerStarted(true)}
               className="btn-primary w-full text-sm h-14 font-display rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
               AI 매칭 시작
@@ -1216,6 +1249,9 @@ function BuyerPhoneContent({
           </p>
           <p className="text-slate-300 text-xs font-display tracking-wider">매칭자를 찾고 있습니다...</p>
           <HologramGrid />
+          <p className="text-point-glow text-sm font-display tracking-wider mt-1">
+            구매 금액 {buyerAmount.toLocaleString('ko-KR')} 원
+          </p>
           {sellerStarted && !amountsMatch && <p className="text-amber-400/90 text-xs mt-2">금액을 동일하게 맞춰 주세요</p>}
         </div>
       )}
@@ -1223,7 +1259,10 @@ function BuyerPhoneContent({
         <div className="opacity-0 animate-fade-in flex flex-col flex-1 min-h-0 h-full min-h-[320px] sm:min-h-[420px] py-4 sm:py-6">
           <div className="space-y-4 flex-shrink-0">
             <div className="glass-card-neon p-4 leading-relaxed">
-              <p className="text-slate-400 text-xs mb-1 font-display tracking-wider">매칭 금액</p>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-slate-400 text-xs font-display tracking-wider">매칭 금액</p>
+                <p className="text-slate-500 text-xs font-display font-bold">거래ID {matchResult.seller?.id ?? '-'}</p>
+              </div>
               <p className="text-point-glow text-2xl tracking-wider drop-shadow-[0_0_12px_rgba(0,255,255,0.5)]">{matchResult.totalAmount.toLocaleString('ko-KR')} 원</p>
               <p className="text-slate-400 text-xs mt-2">판매자 확인 {sellerMatchConfirmed ? '완료' : '대기 중...'}</p>
             </div>
