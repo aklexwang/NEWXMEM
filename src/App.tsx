@@ -966,7 +966,7 @@ function SellerPhoneContent({
               <span>{sellerAmount.toLocaleString('ko-KR')}원</span>
               <span>{phase === 'trading'
                 ? `${Math.max(0, sellerRemainingAmount - (matchResult?.totalAmount ?? 0)).toLocaleString('ko-KR')}원`
-                : `${(sellerRemainingAmount > 0 ? sellerRemainingAmount : sellerAmount).toLocaleString('ko-KR')}원`}</span>
+                : `${sellerRemainingAmount.toLocaleString('ko-KR')}원`}</span>
             </div>
           </div>
         </div>
@@ -1257,6 +1257,9 @@ function SellerPhoneContent({
             </div>
           </section>
           <section className="py-10 pb-0">
+            <p className="text-slate-400 text-xs text-center font-display mb-3">
+              {sellerRemainingAmount > 0 ? '확인을 누르면 남은 금액 매칭을 시작합니다.' : '모든 거래가 완료되었습니다.'}
+            </p>
             <button type="button" onClick={onNewTrade} className="btn-outline w-full h-14 text-sm font-display rounded-xl">
               확인
             </button>
@@ -1392,7 +1395,7 @@ function BuyerPhoneContent({
           위반내역
         </button>
       </div>
-      {(buyerStarted && phase !== 'completed') || (phase === 'completed' && !buyerClickedNew) ? (
+      {(buyerStarted && phase !== 'completed') || (_completedBuyer && !buyerClickedNew) ? (
         <div className="flex-shrink-0 px-2 py-2 border-b border-slate-700/50 bg-slate-900/50">
           <div className="text-point-glow text-sm font-display tracking-wider w-full drop-shadow-[0_0_12px_rgba(0,255,255,0.4)]">
             <div className="flex justify-between items-center">
@@ -1684,7 +1687,7 @@ function BuyerPhoneContent({
           )}
         </div>
       )}
-      {phase === 'completed' && !buyerClickedNew && (
+      {_completedBuyer && !buyerClickedNew && (
         <div className="flex flex-col justify-between min-h-[320px] sm:min-h-[420px] transition-all duration-300">
           <section className="py-10 pt-0">
             <p className="text-cyan-400 text-sm font-bold font-display">거래 완료</p>
