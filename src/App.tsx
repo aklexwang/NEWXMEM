@@ -232,7 +232,6 @@ export default function App() {
   const [confirmTimerSeconds, setConfirmTimerSeconds] = useState(180);
   const [buyerSlots, setBuyerSlots] = useState<BuyerSlot[]>(() => [
     createInitialBuyerSlot(0),
-    createInitialBuyerSlot(1),
   ]);
   const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
 
