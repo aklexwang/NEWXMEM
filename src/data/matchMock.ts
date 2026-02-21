@@ -22,6 +22,30 @@ export const sellerSessionUser: User = {
   points: 120000,
 };
 
+/** 추가 판매자용 템플릿 (2~5번째 판매자) */
+const additionalSellerTemplates: Array<{ bank: string; accountNumber: string; holder: string; name: string }> = [
+  { bank: '신한은행', accountNumber: '110-987-654321', holder: '이성찬', name: '이성찬' },
+  { bank: '국민은행', accountNumber: '123-789-456012', holder: '박보검', name: '박보검' },
+  { bank: 'NH농협', accountNumber: '302-9876-5432-11', holder: '최진실', name: '최진실' },
+  { bank: '케이뱅크', accountNumber: '400-9876-543210', holder: '정부미', name: '정부미' },
+];
+
+/** 새 판매자 화면용 User 생성 (index 0 = 기존 sellerSessionUser, 1~4 = 추가 판매자) */
+export function createSellerUserForIndex(index: number): User {
+  if (index === 0) return sellerSessionUser;
+  const t = additionalSellerTemplates[index - 1];
+  if (!t) return sellerSessionUser;
+  return {
+    id: `seller-${index + 1}`,
+    name: t.name,
+    creditScore: 900 + Math.floor(Math.random() * 40),
+    bank: t.bank,
+    accountNumber: t.accountNumber,
+    holder: t.holder,
+    points: 120000,
+  };
+}
+
 /** 우측 구매자 세션용 사용자 (1번째 구매자) */
 export const buyerSessionUser: User = {
   id: 'buyer-1',
@@ -108,7 +132,7 @@ export function generateSellMatch(totalSellAmount: number): {
   };
 }
 
-/** 2분할 시뮬레이터: 금액 일치 시 1:1 또는 1:N 결과 생성. sellerAccount = 좌측 판매자, buyerAccount = 우측 구매자 */
+/** 다중 매칭: 거래 금액 = min(판매 가능 금액, 구매 신청 금액). 1:1 결과만 반환. */
 export function computeMatchResult(
   sellerAmount: number,
   buyerAmount: number,
@@ -121,6 +145,7 @@ export function computeMatchResult(
   totalAmount: number;
 } | null {
   if (sellerAmount <= 0 || buyerAmount <= 0) return null;
+  const totalAmount = Math.min(sellerAmount, buyerAmount);
   const sellerParticipant: Participant = {
     id: sellerAccount.id,
     name: sellerAccount.name,
@@ -128,37 +153,21 @@ export function computeMatchResult(
     bank: sellerAccount.bank,
     account: sellerAccount.accountNumber,
     holder: sellerAccount.holder,
-    amount: sellerAmount,
+    amount: totalAmount,
   };
-  if (sellerAmount === buyerAmount) {
-    const buyerParticipant: Participant = {
-      id: buyerAccount.id,
-      name: buyerAccount.name,
-      creditScore: buyerAccount.creditScore,
-      bank: buyerAccount.bank,
-      account: buyerAccount.accountNumber,
-      holder: buyerAccount.holder,
-      amount: buyerAmount,
-    };
-    return {
-      type: '1:1',
-      seller: sellerParticipant,
-      buyers: [buyerParticipant],
-      totalAmount: sellerAmount,
-    };
-  }
-  if (sellerAmount > buyerAmount && sellerAmount % buyerAmount === 0) {
-    const n = sellerAmount / buyerAmount;
-    if (n >= 2 && n <= 3) {
-      const shuffled = shuffle(buyerPool).slice(0, n);
-      const buyers: Participant[] = shuffled.map((b) => ({ ...b, amount: buyerAmount }));
-      return {
-        type: '1:N',
-        seller: sellerParticipant,
-        buyers,
-        totalAmount: sellerAmount,
-      };
-    }
-  }
-  return null;
+  const buyerParticipant: Participant = {
+    id: buyerAccount.id,
+    name: buyerAccount.name,
+    creditScore: buyerAccount.creditScore,
+    bank: buyerAccount.bank,
+    account: buyerAccount.accountNumber,
+    holder: buyerAccount.holder,
+    amount: totalAmount,
+  };
+  return {
+    type: '1:1',
+    seller: sellerParticipant,
+    buyers: [buyerParticipant],
+    totalAmount,
+  };
 }
