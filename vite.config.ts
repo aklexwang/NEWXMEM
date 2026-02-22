@@ -6,4 +6,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/NEWXMEM/',  // 저장소 이름이 다르면 여기를 바꾸세요 (예: '/my-app/')
+  server: {
+    port: 5173,  // 원하는 포트로 변경 (예: 3000, 8080)
+  },
 })

@@ -1,14 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { sellerSessionUser, createBuyerUserForIndex, createSellerUserForIndex } from './data/matchMock';
-import type { User } from './types';
+import type { User, SimPhase } from './types';
 import { computeMatchResult } from './data/matchMock';
+import IPhoneFrame from './components/simulator/IPhoneFrame';
+import SellerPhoneContent from './components/simulator/SellerPhoneContent';
+import BuyerPhoneContent from './components/simulator/BuyerPhoneContent';
 
-const MATCH_DELAY_MS = 2000;
-const CONFIRM_DELAY_MS = 1500;
 const MAX_BUYERS = 5;
 const MAX_SELLERS = 5;
 
-type SimPhase = 'idle' | 'searching' | 'confirming' | 'trading' | 'completed';
+/** 시뮬레이터 타이머/지연 설정 (화면 상단에서 변경 가능, 단위 통일: 초) */
+export type SimConfig = {
+  matchDelaySeconds: number;
+  confirmDelaySeconds: number;
+  sellerSearchTimerMinutes: number;
+  buyerSearchTimerMinutes: number;
+  confirmTimerSeconds: number;
+};
+
+export const DEFAULT_SIM_CONFIG: SimConfig = {
+  matchDelaySeconds: 2,
+  confirmDelaySeconds: 1.5,
+  sellerSearchTimerMinutes: 10,
+  buyerSearchTimerMinutes: 5,
+  confirmTimerSeconds: 180,
+};
+
+export type ViolationEntry = { type: string; message: string };
 
 /** 판매자 한 명 분의 상태 (한 개의 판매자 화면) */
 export type SellerSlot = {
@@ -19,17 +37,19 @@ export type SellerSlot = {
   clickedNew: boolean;
   searchTimerSeconds: number;
   currentPoints: number;
+  violationHistory: ViolationEntry[];
 };
 
-function createInitialSellerSlot(index: number): SellerSlot {
+function createInitialSellerSlot(index: number, config: SimConfig = DEFAULT_SIM_CONFIG): SellerSlot {
   return {
     user: createSellerUserForIndex(index),
     amount: 0,
     remainingAmount: 0,
     started: false,
     clickedNew: false,
-    searchTimerSeconds: 600,
+    searchTimerSeconds: config.sellerSearchTimerMinutes * 60,
     currentPoints: 1_000_000,
+    violationHistory: [],
   };
 }
 
@@ -43,151 +63,34 @@ export type BuyerSlot = {
   searchTimerSeconds: number;
   currentPoints: number;
   matchConfirmed: boolean;
+  violationHistory: ViolationEntry[];
 };
 
-function createInitialBuyerSlot(index: number): BuyerSlot {
+function createInitialBuyerSlot(index: number, config: SimConfig = DEFAULT_SIM_CONFIG): BuyerSlot {
   return {
     user: createBuyerUserForIndex(index),
     amount: 0,
     started: false,
     depositDone: false,
     clickedNew: false,
-    searchTimerSeconds: 300,
+    searchTimerSeconds: config.buyerSearchTimerMinutes * 60,
     currentPoints: 0,
     matchConfirmed: false,
+    violationHistory: [],
   };
 }
 
-/** 아이폰 목업 프레임: 홈바, 스크롤바 제거. 반응형: 작은 화면에서 축소. titleAction은 제목 오른쪽(숫자 옆)에 붙음. variant=buyer 시 주황 테마 */
-function IPhoneFrame({
-  title,
-  titleAction,
-  variant = 'seller',
-  children,
-}: {
-  title: string;
-  titleAction?: React.ReactNode;
-  variant?: 'buyer' | 'seller';
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={`flex flex-col items-center justify-center w-full sm:w-auto ${variant === 'buyer' ? 'iphone-frame-buyer' : ''}`}
-    >
-      <div className="flex items-center justify-center gap-1.5 mb-2 sm:mb-3">
-        <span className="text-slate-400 text-xs sm:text-sm font-medium font-display tracking-wider">{title}</span>
-        {titleAction}
-      </div>
-      <div className="relative w-[280px] min-[380px]:w-[300px] sm:w-[318px] rounded-[2.25rem] min-[380px]:rounded-[2.5rem] sm:rounded-[2.75rem] p-1.5 min-[380px]:p-2 bg-slate-800/90 shadow-2xl ring-1 ring-white/10 backdrop-blur-sm">
-        <div className="rounded-[1.9rem] min-[380px]:rounded-[2.1rem] sm:rounded-[2.25rem] overflow-hidden bg-slate-900/95 ring-2 ring-white/5">
-          <div className="h-[484px] min-[380px]:h-[520px] sm:h-[554px] overflow-y-auto overflow-x-hidden scrollbar-hide flex flex-col bg-gradient-to-b from-slate-900/80 to-slate-800/80 px-3 min-[380px]:px-4 pt-1 sm:pt-2 pb-0">
-            {children}
-          </div>
-          {/* 홈 바 (Home Bar) */}
-          <div className="h-5 min-[380px]:h-6 sm:h-7 flex justify-center items-center bg-slate-900/98 pb-0.5 sm:pb-1">
-            <div className="w-24 min-[380px]:w-28 sm:w-32 h-0.5 sm:h-1 rounded-full bg-slate-500/80" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** 홀로그램 그리드 느낌의 AU 봇 - 반투명 그리드·시안 글로우·스캔 연출 */
-function AIBot() {
-  return (
-    <div className="flex flex-col items-center justify-center animate-bot-float">
-      <div className="relative hologram-bot-wrap">
-        <svg width="68" height="76" viewBox="0 0 68 76" fill="none" className="relative hologram-bot-svg" aria-hidden>
-          <defs>
-            {/* 홀로그램 그리드 패턴 */}
-            <pattern id="hologramGrid" width="8" height="8" patternUnits="userSpaceOnUse">
-              <path d="M 8 0 L 0 0 0 8" fill="none" stroke="rgba(34,211,238,0.35)" strokeWidth="0.6" />
-            </pattern>
-            <pattern id="hologramGridDense" width="4" height="4" patternUnits="userSpaceOnUse">
-              <path d="M 4 0 L 0 0 0 4" fill="none" stroke="rgba(167,139,250,0.25)" strokeWidth="0.4" />
-            </pattern>
-            {/* 반투명 홀로그램 그라데이션 */}
-            <linearGradient id="hologramBody" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="rgba(34,211,238,0.22)" />
-              <stop offset="50%" stopColor="rgba(139,92,246,0.18)" />
-              <stop offset="100%" stopColor="rgba(236,72,153,0.15)" />
-            </linearGradient>
-            <linearGradient id="hologramStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgba(34,211,238,0.7)" />
-              <stop offset="100%" stopColor="rgba(244,114,182,0.5)" />
-            </linearGradient>
-            <filter id="ledGlow">
-              <feGaussianBlur stdDeviation="1.2" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <filter id="hologramGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="blur" />
-              <feFlood floodColor="#22d3ee" floodOpacity="0.25" result="color" />
-              <feComposite in="color" in2="blur" operator="in" result="glow" />
-              <feMerge>
-                <feMergeNode in="glow" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          {/* 몸통: 홀로그램 그리드 + 반투명 채우기 */}
-          <rect x="12" y="38" width="44" height="28" rx="8" fill="url(#hologramBody)" stroke="url(#hologramStroke)" strokeWidth="1.2" opacity="0.95" />
-          <rect x="12" y="38" width="44" height="28" rx="8" fill="url(#hologramGrid)" stroke="none" opacity="0.6" />
-          <line x1="34" y1="38" x2="34" y2="66" stroke="rgba(34,211,238,0.4)" strokeWidth="1" />
-          {/* 가슴 패널 */}
-          <rect x="22" y="44" width="24" height="16" rx="4" fill="rgba(15,23,42,0.85)" stroke="#22d3ee" strokeWidth="1" strokeOpacity="0.8" />
-          <circle cx="34" cy="52" r="2.5" fill="#67e8f9" filter="url(#ledGlow)" className="animate-pulse" />
-          {/* 좌우 팔 */}
-          <rect x="4" y="46" width="12" height="14" rx="4" fill="url(#hologramBody)" stroke="url(#hologramStroke)" strokeWidth="1" opacity="0.9" />
-          <rect x="52" y="46" width="12" height="14" rx="4" fill="url(#hologramBody)" stroke="url(#hologramStroke)" strokeWidth="1" opacity="0.9" />
-          <rect x="4" y="46" width="12" height="14" rx="4" fill="url(#hologramGridDense)" stroke="none" opacity="0.5" />
-          <rect x="52" y="46" width="12" height="14" rx="4" fill="url(#hologramGridDense)" stroke="none" opacity="0.5" />
-          {/* 머리 */}
-          <rect x="18" y="8" width="32" height="28" rx="10" fill="url(#hologramBody)" stroke="url(#hologramStroke)" strokeWidth="1.2" opacity="0.95" />
-          <rect x="18" y="8" width="32" height="28" rx="10" fill="url(#hologramGrid)" stroke="none" opacity="0.55" />
-          {/* 얼굴 디스플레이 */}
-          <rect x="22" y="14" width="24" height="16" rx="4" fill="rgba(15,23,42,0.9)" stroke="#22d3ee" strokeWidth="1" strokeOpacity="0.75" />
-          <rect x="26" y="18" width="5" height="4" rx="1" fill="#67e8f9" filter="url(#ledGlow)" />
-          <rect x="37" y="18" width="5" height="4" rx="1" fill="#67e8f9" filter="url(#ledGlow)" />
-          <circle cx="28" cy="20" r="0.6" fill="#f0fdfa" />
-          <circle cx="40" cy="20" r="0.6" fill="#f0fdfa" />
-          <rect x="28" y="25" width="12" height="2" rx="1" fill="#67e8f9" opacity="0.95" />
-          {/* 안테나 */}
-          <path d="M28 8 L26 0" stroke="rgba(34,211,238,0.85)" strokeWidth="2" strokeLinecap="round" />
-          <path d="M40 8 L42 0" stroke="rgba(34,211,238,0.85)" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="26" cy="0" r="3" fill="#67e8f9" filter="url(#ledGlow)" />
-          <circle cx="42" cy="0" r="3" fill="#67e8f9" filter="url(#ledGlow)" />
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-/** 홀로그램 그리드 - 실제 스캔 중인 느낌 (스캔 라인 + 데이터 읽기 연출) */
-function HologramGrid() {
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="hologram-scan-wrapper">
-        <div className="hologram-scan-line" aria-hidden />
-        <div className="hologram-grid">
-          {Array.from({ length: 25 }, (_, i) => (
-            <span key={i} data-cell />
-          ))}
-        </div>
-      </div>
-      <p className="text-cyan-300/90 text-xs font-display tracking-widest animate-pulse">SCANNING...</p>
-    </div>
-  );
-}
-
+/**
+ * 규칙: 상호 연동은 "매칭을 서로 확인하고 거래를 할 때"만 적용.
+ * 그 외(매칭 미확인 모달, 타이머, 입력 등)는 구매자/판매자 각 회원별 독립 작동.
+ */
 export default function App() {
   const MIN_POINT_AMOUNT = 10_000;
   /** 만원 단위만 허용 (10,000 / 20,000 / 30,000 ...). 12,000원, 10,500원 등 불가 */
   const isValidAmount = (n: number) => n >= MIN_POINT_AMOUNT && n % 10_000 === 0;
+
+  const [simConfig, setSimConfig] = useState<SimConfig>(() => ({ ...DEFAULT_SIM_CONFIG }));
+  const [timerEdit, setTimerEdit] = useState<{ key: keyof SimConfig; value: string } | null>(null);
   const [sellerSlots, setSellerSlots] = useState<SellerSlot[]>(() => [createInitialSellerSlot(0)]);
   const [phase, setPhase] = useState<SimPhase>('idle');
   const [matchResult, setMatchResult] = useState<ReturnType<typeof computeMatchResult>>(null);
@@ -203,10 +106,17 @@ export default function App() {
     setSellerSlots((prev) => prev.map((s, i) => (i === index ? updater(s) : s)));
   }, []);
 
-  const setSellerAmount = useCallback((n: number) => setSellerSlotAt(0, (s) => ({ ...s, amount: n })), [setSellerSlotAt]);
+  /** 판매자는 보유 포인트를 초과해 판매 불가 */
+  const setSellerAmount = useCallback(
+    (n: number) => setSellerSlotAt(0, (s) => ({ ...s, amount: Math.min(n, s.currentPoints) })),
+    [setSellerSlotAt]
+  );
   const setSellerRemainingAmount = useCallback(
     (n: number | ((p: number) => number)) =>
-      setSellerSlotAt(0, (s) => ({ ...s, remainingAmount: typeof n === 'function' ? n(s.remainingAmount) : n })),
+      setSellerSlotAt(0, (s) => {
+        const next = typeof n === 'function' ? n(s.remainingAmount) : n;
+        return { ...s, remainingAmount: Math.min(Math.max(0, next), s.currentPoints) };
+      }),
     [setSellerSlotAt]
   );
   const setSellerStarted = useCallback((b: boolean) => setSellerSlotAt(0, (s) => ({ ...s, started: b })), [setSellerSlotAt]);
@@ -215,7 +125,7 @@ export default function App() {
       setSellerSlotAt(0, (s) => ({ ...s, currentPoints: typeof n === 'function' ? n(s.currentPoints) : n })),
     [setSellerSlotAt]
   );
-  const sellerSearchTimerSeconds = sellerSlots[0]?.searchTimerSeconds ?? 600;
+  const sellerSearchTimerSeconds = sellerSlots[0]?.searchTimerSeconds ?? simConfig.sellerSearchTimerMinutes * 60;
   const setSellerSearchTimerSeconds = useCallback(
     (n: number | ((p: number) => number)) =>
       setSellerSlotAt(0, (s) => ({
@@ -227,13 +137,19 @@ export default function App() {
   const [rejectReason, setRejectReason] = useState<string | null>(null);
   const [sellerRejectDepositReason, setSellerRejectDepositReason] = useState<string | null>(null);
   const [sellerRejectDepositReasonBuyerIndex, setSellerRejectDepositReasonBuyerIndex] = useState<number | null>(null);
-  const [violationHistory, setViolationHistory] = useState<Array<{ type: string; message: string }>>([]);
   const [sellerMatchConfirmed, setSellerMatchConfirmed] = useState(false);
-  const [confirmTimerSeconds, setConfirmTimerSeconds] = useState(180);
+  const [confirmTimerSeconds, setConfirmTimerSeconds] = useState(simConfig.confirmTimerSeconds);
   const [buyerSlots, setBuyerSlots] = useState<BuyerSlot[]>(() => [
     createInitialBuyerSlot(0),
   ]);
   const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
+  const [canceledMatchedBuyerIndex, setCanceledMatchedBuyerIndex] = useState<number | null>(null);
+  const [sellerMatchCanceledDismissed, setSellerMatchCanceledDismissed] = useState(false);
+  const [buyerMatchCanceledDismissed, setBuyerMatchCanceledDismissed] = useState(false);
+  /** 취소 시점에 구매자/판매자가 이미 확인했는지 → 모달 문구 구분용 */
+  const [canceledBuyerHadConfirmed, setCanceledBuyerHadConfirmed] = useState(false);
+  const [canceledSellerHadConfirmed, setCanceledSellerHadConfirmed] = useState(false);
+  const confirmingMatchedBuyerIndexRef = useRef<number | null>(null);
 
   const matchedSlot = matchedBuyerIndex !== null ? buyerSlots[matchedBuyerIndex] : null;
   const buyerDepositDone = matchedSlot?.depositDone ?? false;
@@ -245,25 +161,31 @@ export default function App() {
     isValidAmount(sellerRemainingAmount) &&
     isValidAmount(matchedSlot.amount);
 
+  /** 매칭 미확인 모달이 떠 있는 동안(한쪽이라도 확인 전): 모든 동작 중지 */
+  const matchCanceledModalOpen =
+    canceledMatchedBuyerIndex !== null && (!sellerMatchCanceledDismissed || !buyerMatchCanceledDismissed);
+
   const setBuyerSlotAt = useCallback((index: number, updater: (prev: BuyerSlot) => BuyerSlot) => {
     setBuyerSlots((prev) => prev.map((s, i) => (i === index ? updater(s) : s)));
   }, []);
 
-  // 판매자: AI 매칭 시작 누른 시점에 10분 타이머 시작
+  // 판매자: AI 매칭 시작 누른 시점에 검색 타이머 시작
   const prevSellerStarted = useRef(false);
   useEffect(() => {
-    if (sellerStarted && !prevSellerStarted.current) setSellerSearchTimerSeconds(600);
+    if (sellerStarted && !prevSellerStarted.current) setSellerSearchTimerSeconds(simConfig.sellerSearchTimerMinutes * 60);
     prevSellerStarted.current = sellerStarted;
-  }, [sellerStarted]);
+  }, [sellerStarted, simConfig.sellerSearchTimerMinutes]);
   useEffect(() => {
     if (!sellerStarted) return;
     if (phase !== 'idle' && phase !== 'searching' && phase !== 'confirming' && phase !== 'trading') return;
+    if (matchCanceledModalOpen) return;
     const id = setInterval(() => setSellerSearchTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => clearInterval(id);
-  }, [sellerStarted, phase]);
+  }, [sellerStarted, phase, matchCanceledModalOpen]);
 
-  // 추가 판매자 슬롯(2번째~) 검색 타이머 1초 감소
+  // 추가 판매자 슬롯(2번째~) 검색 타이머 1초 감소 (매칭 미확인 모달 떠 있으면 중지)
   useEffect(() => {
+    if (matchCanceledModalOpen) return;
     const id = setInterval(() => {
       setSellerSlots((prev) =>
         prev.map((s, i) =>
@@ -272,10 +194,11 @@ export default function App() {
       );
     }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [matchCanceledModalOpen]);
 
-  // 구매자별 타이머: started인 슬롯 중 매칭된 슬롯 또는 idle일 때 1초마다 감소
+  // 구매자별 검색 타이머: idle일 땐 전원 감소, searching/confirming/trading일 땐 비매칭 구매자만 감소 (매칭된 구매자는 확인 타이머 사용)
   useEffect(() => {
+    if (matchCanceledModalOpen) return;
     const id = setInterval(() => {
       setBuyerSlots((prev) =>
         prev.map((s, i) => {
@@ -283,42 +206,59 @@ export default function App() {
           const active =
             s.started &&
             (phase === 'idle' || phase === 'searching' || phase === 'confirming' || phase === 'trading');
-          if (!active || (phase !== 'idle' && !isMatched)) return s;
+          if (!active) return s;
+          if (phase !== 'idle' && isMatched) return s;
           return { ...s, searchTimerSeconds: s.searchTimerSeconds > 0 ? s.searchTimerSeconds - 1 : 0 };
         })
       );
     }, 1000);
     return () => clearInterval(id);
-  }, [phase, matchedBuyerIndex]);
+  }, [phase, matchedBuyerIndex, matchCanceledModalOpen]);
 
-  // 1) 판매자와 어느 한 구매자라도 매칭 가능(min > 0)이면 그 구매자와 SEARCHING (다중 매칭)
+  // 1) 판매자와 매칭 가능한 구매자 중 판매 금액에 가장 가까운 금액부터 매칭 → SEARCHING
   useEffect(() => {
     if (!sellerStarted || phase !== 'idle') return;
+    const candidates: { index: number; amount: number }[] = [];
     for (let i = 0; i < buyerSlots.length; i++) {
       const slot = buyerSlots[i];
       const matchAmount = Math.min(sellerAmount, slot.amount);
       if (slot.started && matchAmount > 0 && isValidAmount(sellerAmount) && isValidAmount(slot.amount)) {
-        setSellerRemainingAmount(sellerAmount);
-        setMatchedBuyerIndex(i);
-        setPhase('searching');
-        return;
+        candidates.push({ index: i, amount: slot.amount });
       }
     }
+    if (candidates.length === 0) return;
+    candidates.sort((a, b) => {
+      const diffA = Math.abs(a.amount - sellerAmount);
+      const diffB = Math.abs(b.amount - sellerAmount);
+      return diffA !== diffB ? diffA - diffB : a.index - b.index;
+    });
+    const best = candidates[0];
+    setSellerRemainingAmount(sellerAmount);
+    setMatchedBuyerIndex(best.index);
+    setPhase('searching');
   }, [sellerStarted, phase, sellerAmount, buyerSlots]);
 
-  // 1b) SEARCHING인데 아직 매칭 상대 없을 때 (판매자 확인 후 재검색) → 매칭 가능한 구매자 찾기
+  // 1b) SEARCHING 재검색 시에도 판매 남은금액에 가장 가까운 구매 금액부터 매칭 (매칭 미확인 모달 떠 있으면 중지)
   useEffect(() => {
+    if (matchCanceledModalOpen) return;
     if (phase !== 'searching' || matchedBuyerIndex !== null || !sellerStarted || sellerRemainingAmount <= 0) return;
+    const candidates: { index: number; amount: number }[] = [];
     for (let i = 0; i < buyerSlots.length; i++) {
       const slot = buyerSlots[i];
       const matchAmount = Math.min(sellerRemainingAmount, slot.amount);
       if (slot.started && matchAmount > 0 && isValidAmount(slot.amount)) {
-        setSellerClickedNew(false);
-        setMatchedBuyerIndex(i);
-        return;
+        candidates.push({ index: i, amount: slot.amount });
       }
     }
-  }, [phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, buyerSlots]);
+    if (candidates.length === 0) return;
+    candidates.sort((a, b) => {
+      const diffA = Math.abs(a.amount - sellerRemainingAmount);
+      const diffB = Math.abs(b.amount - sellerRemainingAmount);
+      return diffA !== diffB ? diffA - diffB : a.index - b.index;
+    });
+    setSellerClickedNew(false);
+    setMatchedBuyerIndex(candidates[0].index);
+  }, [phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, buyerSlots, matchCanceledModalOpen]);
 
   // 2) SEARCHING 2초 뒤 매칭 성사 → confirming (거래 금액 = min(판매 남은금액, 구매 신청금액))
   const matchSearchRef = useRef({
@@ -343,10 +283,10 @@ export default function App() {
       setSellerMatchConfirmed(false);
       setBuyerSlotAt(idx, (prev) => ({ ...prev, depositDone: false, matchConfirmed: false }));
       setSellerConfirmed(false);
-    }, MATCH_DELAY_MS);
+    }, simConfig.matchDelaySeconds * 1000);
     return () => clearTimeout(timer);
     // buyerSlots 제외: 1초마다 구매자 타이머 갱신으로 인해 effect가 재실행되면 2초 타이머가 리셋되어 매칭이 안 됨
-  }, [phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, setBuyerSlotAt]);
+  }, [phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, setBuyerSlotAt, simConfig.matchDelaySeconds]);
 
   // 3) 양쪽 모두 매칭 확인 시 거래(trading) 단계
   useEffect(() => {
@@ -376,13 +316,13 @@ export default function App() {
       setSellerCurrentPoints((prev) => prev - total);
       setSellerRemainingAmount((prev) => Math.max(0, prev - total));
       setBuyerSlotAt(idx, (prev) => ({ ...prev, currentPoints: prev.currentPoints + total, started: false, amount: 0 }));
-    }, CONFIRM_DELAY_MS);
+    }, simConfig.confirmDelaySeconds * 1000);
     return () => clearTimeout(t);
-  }, [phase, matchResult, matchedBuyerIndex, sellerConfirmed, setBuyerSlotAt]);
+  }, [phase, matchResult, matchedBuyerIndex, sellerConfirmed, setBuyerSlotAt, simConfig.confirmDelaySeconds]);
 
   const reset = useCallback(() => {
     setSellerSlots((prev) =>
-      prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0), user: s.user } : s))
+      prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user } : s))
     );
     setPhase('idle');
     setMatchResult(null);
@@ -398,10 +338,10 @@ export default function App() {
         depositDone: false,
         clickedNew: false,
         matchConfirmed: false,
-        searchTimerSeconds: 300,
+        searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
       }))
     );
-  }, []);
+  }, [simConfig]);
 
   /** 매칭 확인: 판매자 확인 */
   const handleSellerConfirmMatch = useCallback(() => setSellerMatchConfirmed(true), []);
@@ -412,42 +352,93 @@ export default function App() {
     [setBuyerSlotAt]
   );
 
-  /** 매칭 확인 단계: 취소 시 초기 화면으로 */
+  /** confirming 진입 시 매칭된 구매자 인덱스를 ref에 고정 (타이머 만료 시 스테일 클로저 방지) */
+  const declineMatchFiredRef = useRef(false);
+  useEffect(() => {
+    if (phase === 'confirming' && matchedBuyerIndex !== null) {
+      confirmingMatchedBuyerIndexRef.current = matchedBuyerIndex;
+      declineMatchFiredRef.current = false;
+    } else if (phase !== 'confirming') {
+      confirmingMatchedBuyerIndexRef.current = null;
+    }
+  }, [phase, matchedBuyerIndex]);
+
+  /** 매칭 확인 단계: 시간 초과/취소 시 해당 매칭만 취소. 모달 뜨는 순간 판매자·해당 구매자 화면은 초기화면으로. */
   const handleDeclineMatch = useCallback(() => {
-    setViolationHistory((prev) => [...prev, { type: '취소', message: '매칭 확인 시간 초과 또는 취소' }]);
-    setSellerAmount(0);
-    setSellerRemainingAmount(0);
-    setPhase('idle');
+    const idx = confirmingMatchedBuyerIndexRef.current ?? matchedBuyerIndex;
+    const buyerHadConfirmed = idx !== null ? (buyerSlots[idx]?.matchConfirmed ?? false) : false;
+    const sellerHadConfirmed = sellerMatchConfirmed;
+    const violationEntry: ViolationEntry = { type: '취소', message: '매칭 확인 시간 초과 또는 취소' };
+    setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
     setMatchResult(null);
-    setSellerStarted(false);
     setSellerMatchConfirmed(false);
     setMatchedBuyerIndex(null);
-    setBuyerSlots((prev) =>
-      prev.map((s) => ({
-        ...s,
-        amount: 0,
-        started: false,
-        depositDone: false,
-        clickedNew: false,
-        matchConfirmed: false,
-        searchTimerSeconds: 300,
-      }))
-    );
-  }, []);
+    setPhase('idle');
+    setSellerStarted(false);
+    setSellerAmount(0);
+    setSellerRemainingAmount(0);
+    if (idx !== null) {
+      setCanceledBuyerHadConfirmed(buyerHadConfirmed);
+      setCanceledSellerHadConfirmed(sellerHadConfirmed);
+      setBuyerSlots((prev) =>
+        prev.map((s, i) =>
+          i === idx
+            ? {
+                ...s,
+                started: false,
+                amount: 0,
+                depositDone: false,
+                matchConfirmed: false,
+                searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+                violationHistory: [...s.violationHistory, violationEntry],
+              }
+            : s
+        )
+      );
+      setCanceledMatchedBuyerIndex(idx);
+      setSellerMatchCanceledDismissed(false);
+      setBuyerMatchCanceledDismissed(false);
+    }
+    confirmingMatchedBuyerIndexRef.current = null;
+  }, [matchedBuyerIndex, sellerMatchConfirmed, buyerSlots, simConfig.buyerSearchTimerMinutes, setSellerSlotAt]);
+
+  /** 매칭 미확인 모달 "확인": 화면은 이미 초기화면이므로 모달만 닫고, 둘 다 확인 시 정리. */
+  const handleMatchCanceledConfirm = useCallback(
+    (source: 'seller' | number) => {
+      if (source === 'seller') setSellerMatchCanceledDismissed(true);
+      else setBuyerMatchCanceledDismissed(true);
+      if (source === 'seller' && buyerMatchCanceledDismissed) {
+        setCanceledMatchedBuyerIndex(null);
+        setCanceledBuyerHadConfirmed(false);
+        setCanceledSellerHadConfirmed(false);
+      } else if (typeof source === 'number' && sellerMatchCanceledDismissed) {
+        setCanceledMatchedBuyerIndex(null);
+        setCanceledBuyerHadConfirmed(false);
+        setCanceledSellerHadConfirmed(false);
+      }
+    },
+    [sellerMatchCanceledDismissed, buyerMatchCanceledDismissed]
+  );
 
   useEffect(() => {
     if (phase !== 'confirming') return;
-    setConfirmTimerSeconds(180);
+    setConfirmTimerSeconds(simConfig.confirmTimerSeconds);
     const id = setInterval(() => setConfirmTimerSeconds((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, simConfig.confirmTimerSeconds]);
   useEffect(() => {
-    if (phase === 'confirming' && confirmTimerSeconds === 0) handleDeclineMatch();
+    if (phase === 'confirming' && confirmTimerSeconds === 0 && !declineMatchFiredRef.current) {
+      declineMatchFiredRef.current = true;
+      handleDeclineMatch();
+    }
   }, [phase, confirmTimerSeconds, handleDeclineMatch]);
 
-  /** 판매자 '확인' 클릭: 남은금액 있으면 거래완료만 닫고 재검색, 없으면 초기화 */
+  /** 판매자 '확인' 클릭: 본인 화면만 갱신. 거래완료 화면에서는 phase/구매자 변경 없음. */
   const handleSellerNewTrade = useCallback(() => {
     setSellerClickedNew(true);
+    if (phase === 'completed') {
+      return;
+    }
     if (sellerRemainingAmount > 0) {
       setPhase('searching');
       setMatchResult(null);
@@ -465,28 +456,41 @@ export default function App() {
         setSellerClickedNew(false);
         setMatchedBuyerIndex(null);
         setBuyerSlots((prev) =>
-          prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: 300 }))
+          prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
         );
       }
     }
-  }, [matchedBuyerIndex, buyerSlots, sellerRemainingAmount]);
+  }, [phase, matchedBuyerIndex, buyerSlots, sellerRemainingAmount, simConfig.buyerSearchTimerMinutes]);
 
-  /** 구매자 '새 거래' 클릭 (buyerIndex) */
+  /** 구매자 '확인' 클릭: 본인만 갱신. 양쪽 모두 확인했을 때만 공통 리셋(남은금액 있으면 구매자만 초기화 후 재매칭). */
   const handleBuyerNewTrade = useCallback(
     (buyerIndex: number) => {
-      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: 300 }));
+      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
       if (sellerClickedNew && matchedBuyerIndex === buyerIndex) {
-        setPhase('idle');
         setMatchResult(null);
+        setMatchedBuyerIndex(null);
         setSellerConfirmed(false);
         setSellerClickedNew(false);
-        setMatchedBuyerIndex(null);
-        setBuyerSlots((prev) =>
-          prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: 300 }))
-        );
+        if (sellerRemainingAmount > 0) {
+          setPhase('idle');
+          setBuyerSlots((prev) =>
+            prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
+          );
+        } else {
+          setPhase('idle');
+          setSellerAmount(0);
+          setSellerRemainingAmount(0);
+          setSellerStarted(false);
+          setSellerSlots((prev) =>
+            prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user } : s))
+          );
+          setBuyerSlots((prev) =>
+            prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
+          );
+        }
       }
     },
-    [sellerClickedNew, matchedBuyerIndex, setBuyerSlotAt]
+    [sellerClickedNew, matchedBuyerIndex, sellerRemainingAmount, setBuyerSlotAt, simConfig]
   );
 
   /** 판매자 매칭 검색 취소 */
@@ -512,10 +516,20 @@ export default function App() {
     [matchedBuyerIndex, setBuyerSlotAt]
   );
 
-  /** 구매자 거부 → 매칭 취소, 판매자에게 사유 모달 */
+  /** 구매자 거부 → 매칭 취소, 판매자에게 사유 모달. 위반내역은 해당 구매자·판매자만 기록. */
   const handleRejectMatch = useCallback(
     (buyerIndex: number, reason: string) => {
-      setViolationHistory((prev) => [...prev, { type: '거부', message: `구매자 거부: ${reason}` }]);
+      const entry: ViolationEntry = { type: '거부', message: `구매자 거부: ${reason}` };
+      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, entry] }));
+      setBuyerSlotAt(buyerIndex, (s) => ({
+        ...s,
+        amount: 0,
+        started: false,
+        depositDone: false,
+        clickedNew: false,
+        searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+        violationHistory: [...s.violationHistory, entry],
+      }));
       setRejectReason(reason);
       setSellerAmount(0);
       setSellerRemainingAmount(0);
@@ -524,38 +538,39 @@ export default function App() {
       setSellerStarted(false);
       setSellerConfirmed(false);
       setMatchedBuyerIndex(null);
-      setBuyerSlots((prev) =>
-        prev.map((s, i) =>
-          i === buyerIndex
-            ? { ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: 300 }
-            : s
-        )
-      );
     },
-    []
+    [simConfig.buyerSearchTimerMinutes, setSellerSlotAt, setBuyerSlotAt]
   );
 
   const clearRejectReason = useCallback(() => setRejectReason(null), []);
 
-  /** 판매자 입금 거부 → 해당 구매자에게만 사유 표시 */
-  const handleSellerRejectDeposit = useCallback((reason: string) => {
-    const idx = matchedBuyerIndex;
-    setViolationHistory((prev) => [...prev, { type: '거부', message: `판매자 입금 거부: ${reason}` }]);
-    setSellerRejectDepositReason(reason);
-    setSellerRejectDepositReasonBuyerIndex(idx);
-    setSellerRemainingAmount(0);
-    setPhase('idle');
-    setMatchResult(null);
-    setSellerStarted(false);
-    setSellerConfirmed(false);
-    setMatchedBuyerIndex(null);
-    setBuyerSlots((prev) =>
-      prev.map((s, i) =>
-        i === idx ? { ...s, amount: 0, started: false, depositDone: false, searchTimerSeconds: 300 } : s
-      )
-    );
-    setSellerAmount(0);
-  }, [matchedBuyerIndex]);
+  /** 판매자 입금 거부 → 해당 구매자에게만 사유 표시. 위반내역은 해당 판매자·구매자만 기록. */
+  const handleSellerRejectDeposit = useCallback(
+    (reason: string) => {
+      const idx = matchedBuyerIndex;
+      const entry: ViolationEntry = { type: '거부', message: `판매자 입금 거부: ${reason}` };
+      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, entry] }));
+      if (idx !== null) {
+        setBuyerSlotAt(idx, (s) => ({
+          ...s,
+          amount: 0,
+          started: false,
+          depositDone: false,
+          searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+          violationHistory: [...s.violationHistory, entry],
+        }));
+      }
+      setSellerRejectDepositReason(reason);
+      setSellerRejectDepositReasonBuyerIndex(idx);
+      setSellerRemainingAmount(0);
+      setPhase('idle');
+      setMatchResult(null);
+      setSellerStarted(false);
+      setSellerConfirmed(false);
+      setMatchedBuyerIndex(null);
+    },
+    [matchedBuyerIndex, setSellerSlotAt, setBuyerSlotAt]
+  );
   const clearSellerRejectDepositReason = useCallback(() => {
     setSellerRejectDepositReason(null);
     setSellerRejectDepositReasonBuyerIndex(null);
@@ -565,9 +580,9 @@ export default function App() {
   const addBuyerSlot = useCallback(() => {
     setBuyerSlots((prev) => {
       if (prev.length >= MAX_BUYERS) return prev;
-      return [...prev, createInitialBuyerSlot(prev.length)];
+      return [...prev, createInitialBuyerSlot(prev.length, simConfig)];
     });
-  }, []);
+  }, [simConfig]);
 
   /** 추가된 구매자 화면 삭제 (1번은 유지, 2~5번만 삭제 가능) */
   const removeBuyerSlot = useCallback((buyerIndex: number) => {
@@ -597,9 +612,9 @@ export default function App() {
   const addSellerSlot = useCallback(() => {
     setSellerSlots((prev) => {
       if (prev.length >= MAX_SELLERS) return prev;
-      return [...prev, createInitialSellerSlot(prev.length)];
+      return [...prev, createInitialSellerSlot(prev.length, simConfig)];
     });
-  }, []);
+  }, [simConfig]);
 
   /** 추가된 판매자 화면 삭제 (1번은 유지, 2~5번만 삭제 가능) */
   const removeSellerSlot = useCallback((sellerIndex: number) => {
@@ -612,16 +627,88 @@ export default function App() {
 
   const sellerDisplayPoints = sellerCurrentPoints;
 
+  const updateSimConfig = useCallback(<K extends keyof SimConfig>(key: K, value: SimConfig[K]) => {
+    setSimConfig((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const resetSimConfig = useCallback(() => {
+    setSimConfig({ ...DEFAULT_SIM_CONFIG });
+    setTimerEdit(null);
+  }, []);
+
+  const timerFields: { key: keyof SimConfig; min: number; max: number }[] = [
+    { key: 'matchDelaySeconds', min: 0.1, max: 30 },
+    { key: 'confirmDelaySeconds', min: 0.1, max: 10 },
+    { key: 'sellerSearchTimerMinutes', min: 1, max: 60 },
+    { key: 'buyerSearchTimerMinutes', min: 1, max: 60 },
+    { key: 'confirmTimerSeconds', min: 10, max: 600 },
+  ];
+  const getTimerDisplayValue = (key: keyof SimConfig) =>
+    timerEdit?.key === key ? timerEdit.value : String(simConfig[key]);
+  const handleTimerFocus = (key: keyof SimConfig) =>
+    setTimerEdit({ key, value: String(simConfig[key]) });
+  const handleTimerChange = (key: keyof SimConfig, raw: string) =>
+    setTimerEdit((prev) => (prev?.key === key ? { ...prev, value: raw } : prev));
+  const handleTimerBlur = (key: keyof SimConfig, min: number, max: number) => {
+    const raw = timerEdit?.key === key ? timerEdit.value : String(simConfig[key]);
+    const num = Number(raw);
+    const clamped = Number.isFinite(num) ? Math.min(max, Math.max(min, num)) : min;
+    updateSimConfig(key, clamped as SimConfig[typeof key]);
+    setTimerEdit(null);
+  };
+
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center mesh-bg py-4 px-3 sm:py-6 sm:px-4 md:py-8 lg:py-10 lg:px-4 overflow-auto scrollbar-hide">
-      <h1 className="text-slate-300/90 text-xs sm:text-sm font-display font-medium tracking-[0.15em] sm:tracking-[0.2em] mb-4 sm:mb-6 lg:mb-8">실시간 매칭 시뮬레이터</h1>
+      <h1 className="text-slate-300/90 text-xs sm:text-sm font-display font-medium tracking-[0.15em] sm:tracking-[0.2em] mb-3 sm:mb-4">실시간 매칭 시뮬레이터</h1>
+
+      {/* 타이머/지연 설정 패널 - 넉넉한 너비로 입력 5개 수용 */}
+      <section className="w-full max-w-[960px] min-w-0 mx-auto mb-4 sm:mb-6 px-4 sm:px-6">
+        <div className="rounded-2xl px-6 pt-4 pb-4 sm:px-10 sm:pt-5 sm:pb-5 bg-slate-800/90 shadow-2xl ring-1 ring-white/10 backdrop-blur-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h2 className="text-slate-400 text-xs sm:text-sm font-display font-medium tracking-wider">타이머 · 지연 설정</h2>
+            <button
+              type="button"
+              onClick={resetSimConfig}
+              className="text-slate-500 hover:text-cyan-400 text-xs font-display transition-colors flex-shrink-0"
+            >
+              기본값 복원
+            </button>
+          </div>
+          <div className="grid grid-cols-5 gap-4 sm:gap-5" style={{ gridTemplateColumns: 'repeat(5, minmax(9rem, 1fr))' }}>
+            {[
+              { key: 'matchDelaySeconds' as const, label: '매칭 대기 (초)' },
+              { key: 'confirmDelaySeconds' as const, label: '거래확인 대기 (초)' },
+              { key: 'sellerSearchTimerMinutes' as const, label: '판매자 검색 (분)' },
+              { key: 'buyerSearchTimerMinutes' as const, label: '구매자 검색 (분)' },
+              { key: 'confirmTimerSeconds' as const, label: '매칭 확인 제한 (초)' },
+            ].map(({ key, label }) => {
+              const { min, max } = timerFields.find((f) => f.key === key)!;
+              return (
+                <label key={key} className="flex flex-col gap-1.5 min-w-0">
+                  <span className="text-slate-500 text-[10px] sm:text-xs font-display">{label}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={getTimerDisplayValue(key)}
+                    onFocus={() => handleTimerFocus(key)}
+                    onChange={(e) => handleTimerChange(key, e.target.value)}
+                    onBlur={() => handleTimerBlur(key, min, max)}
+                    className="w-full h-[50px] min-w-[140px] rounded-xl bg-slate-700/80 border border-slate-600/60 text-slate-200 text-sm px-3 text-center focus:border-cyan-500/50 focus:outline-none"
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <div className="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 xl:gap-16 w-full max-w-[1800px]">
         {/* 구매자 화면 1 (제목 "1" 옆에 + 버튼, 주황 테마) */}
         <IPhoneFrame
           variant="buyer"
           title="구매자 화면 1"
           titleAction={
-            buyerSlots.length < MAX_BUYERS ? (
+            buyerSlots.length < MAX_BUYERS && sellerSlots.length <= 1 ? (
               <button
                 type="button"
                 onClick={addBuyerSlot}
@@ -646,7 +733,7 @@ export default function App() {
             minPointAmount={MIN_POINT_AMOUNT}
             isValidAmount={isValidAmount(buyerSlots[0].amount)}
             setBuyerStarted={() =>
-              setBuyerSlotAt(0, (s) => ({ ...s, started: true, searchTimerSeconds: 300 }))
+              setBuyerSlotAt(0, (s) => ({ ...s, started: true, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
             }
             matchResult={matchedBuyerIndex === 0 ? matchResult : null}
             buyerDepositDone={buyerSlots[0].depositDone}
@@ -669,9 +756,25 @@ export default function App() {
               sellerRejectDepositReasonBuyerIndex === 0 ? sellerRejectDepositReason : null
             }
             onClearSellerRejectDepositReason={clearSellerRejectDepositReason}
-            violationHistory={violationHistory}
+            violationHistory={buyerSlots[0].violationHistory ?? []}
             memberId={buyerSlots[0].user.id}
             onCancelSearch={() => handleCancelBuyerSearch(0)}
+            showMatchCanceledModal={canceledMatchedBuyerIndex === 0 && !buyerMatchCanceledDismissed}
+            onConfirmMatchCanceledModal={
+              canceledBuyerHadConfirmed
+                ? () => {
+                    handleMatchCanceledConfirm(0);
+                    setBuyerSlotAt(0, (s) => ({
+                      ...s,
+                      started: true,
+                      searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+                    }));
+                  }
+                : () => handleMatchCanceledConfirm(0)
+            }
+            matchCanceledModalTitle={canceledBuyerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
+            matchCanceledModalSubtitle={canceledBuyerHadConfirmed ? '판매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
+            matchCanceledModalButtonText={canceledBuyerHadConfirmed ? '재매칭' : '확인'}
           />
         </IPhoneFrame>
         {/* 구매자 화면 2~5 (제목 옆에 - 삭제 버튼) */}
@@ -706,7 +809,7 @@ export default function App() {
                 minPointAmount={MIN_POINT_AMOUNT}
                 isValidAmount={isValidAmount(slot.amount)}
                 setBuyerStarted={() =>
-                  setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: true, searchTimerSeconds: 300 }))
+                  setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: true, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
                 }
                 matchResult={matchedBuyerIndex === buyerIndex ? matchResult : null}
                 buyerDepositDone={slot.depositDone}
@@ -729,9 +832,25 @@ export default function App() {
                   sellerRejectDepositReasonBuyerIndex === buyerIndex ? sellerRejectDepositReason : null
                 }
                 onClearSellerRejectDepositReason={clearSellerRejectDepositReason}
-                violationHistory={violationHistory}
+                violationHistory={buyerSlots[buyerIndex].violationHistory ?? []}
                 memberId={slot.user.id}
                 onCancelSearch={() => handleCancelBuyerSearch(buyerIndex)}
+                showMatchCanceledModal={canceledMatchedBuyerIndex === buyerIndex && !buyerMatchCanceledDismissed}
+                onConfirmMatchCanceledModal={
+                  canceledBuyerHadConfirmed
+                    ? () => {
+                        handleMatchCanceledConfirm(buyerIndex);
+                        setBuyerSlotAt(buyerIndex, (s) => ({
+                          ...s,
+                          started: true,
+                          searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+                        }));
+                      }
+                    : () => handleMatchCanceledConfirm(buyerIndex)
+                }
+                matchCanceledModalTitle={canceledBuyerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
+                matchCanceledModalSubtitle={canceledBuyerHadConfirmed ? '판매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
+                matchCanceledModalButtonText={canceledBuyerHadConfirmed ? '재매칭' : '확인'}
               />
             </IPhoneFrame>
           );
@@ -740,7 +859,7 @@ export default function App() {
         <IPhoneFrame
           title="판매자 화면 1"
           titleAction={
-            sellerSlots.length < MAX_SELLERS ? (
+            sellerSlots.length < MAX_SELLERS && buyerSlots.length <= 1 ? (
               <button
                 type="button"
                 onClick={addSellerSlot}
@@ -783,9 +902,13 @@ export default function App() {
             onDeclineMatch={handleDeclineMatch}
             confirmTimerSeconds={confirmTimerSeconds}
             onRejectDeposit={handleSellerRejectDeposit}
-            violationHistory={violationHistory}
+            violationHistory={sellerSlots[0]?.violationHistory ?? []}
             memberId={sellerSlots[0]?.user.id ?? sellerSessionUser.id}
             onCancelSearch={handleCancelSellerSearch}
+            showMatchCanceledModal={canceledMatchedBuyerIndex !== null && !sellerMatchCanceledDismissed}
+            onConfirmMatchCanceledModal={() => handleMatchCanceledConfirm('seller')}
+            matchCanceledModalTitle={canceledSellerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
+            matchCanceledModalSubtitle={canceledSellerHadConfirmed ? '구매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
           />
         </IPhoneFrame>
         {/* 판매자 화면 2~5 (제목 옆에 - 삭제 버튼) */}
@@ -814,7 +937,7 @@ export default function App() {
                 amountsMatch={false}
                 sellerAmount={slot.amount}
                 sellerRemainingAmount={slot.remainingAmount > 0 ? slot.remainingAmount : slot.amount}
-                setSellerAmount={(n) => setSellerSlotAt(sellerIndex, (s) => ({ ...s, amount: n }))}
+                setSellerAmount={(n) => setSellerSlotAt(sellerIndex, (s) => ({ ...s, amount: Math.min(n, s.currentPoints) }))}
                 minPointAmount={MIN_POINT_AMOUNT}
                 isValidAmount={isValidAmount(slot.amount)}
                 setSellerStarted={(b) => setSellerSlotAt(sellerIndex, (s) => ({ ...s, started: b }))}
@@ -826,7 +949,7 @@ export default function App() {
                 completed={false}
                 onReset={reset}
                 sellerClickedNew={slot.clickedNew}
-                onNewTrade={() => setSellerSlotAt(sellerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: 600 }))}
+                onNewTrade={() => setSellerSlotAt(sellerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: simConfig.sellerSearchTimerMinutes * 60 }))}
                 sellerSearchTimerSeconds={slot.searchTimerSeconds}
                 rejectReason={null}
                 onClearRejectReason={() => {}}
@@ -835,872 +958,14 @@ export default function App() {
                 buyerMatchConfirmed={false}
                 onConfirmMatch={() => {}}
                 onDeclineMatch={() => {}}
-                confirmTimerSeconds={180}
+                confirmTimerSeconds={simConfig.confirmTimerSeconds}
                 onRejectDeposit={() => {}}
-                violationHistory={[]}
+                violationHistory={slot.violationHistory ?? []}
                 memberId={slot.user.id}
               />
             </IPhoneFrame>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-function SellerPhoneContent({
-  phase,
-  sellerStarted,
-  buyerStarted,
-  amountsMatch,
-  sellerAmount,
-  sellerRemainingAmount,
-  setSellerAmount,
-  minPointAmount: _minPointAmount,
-  isValidAmount,
-  setSellerStarted,
-  matchResult,
-  buyerDepositDone,
-  sellerConfirmed,
-  setSellerConfirmed,
-  displayPoints,
-  completed: _completed,
-  onReset,
-  sellerClickedNew,
-  onNewTrade,
-  sellerSearchTimerSeconds,
-  rejectReason,
-  onClearRejectReason,
-  matchConfirming,
-  sellerMatchConfirmed,
-  buyerMatchConfirmed,
-  onConfirmMatch,
-  onDeclineMatch,
-  confirmTimerSeconds,
-  onRejectDeposit,
-  violationHistory,
-  memberId,
-  onCancelSearch,
-}: {
-  phase: SimPhase;
-  sellerStarted: boolean;
-  buyerStarted: boolean;
-  amountsMatch: boolean;
-  sellerAmount: number;
-  sellerRemainingAmount: number;
-  setSellerAmount: (n: number) => void;
-  minPointAmount: number;
-  isValidAmount: boolean;
-  setSellerStarted: (b: boolean) => void;
-  matchResult: ReturnType<typeof computeMatchResult>;
-  buyerDepositDone: boolean;
-  sellerConfirmed: boolean;
-  setSellerConfirmed: (b: boolean) => void;
-  displayPoints: number;
-  completed: boolean;
-  onReset: () => void; // passed for consistency, may be used later
-  sellerClickedNew: boolean;
-  onNewTrade: () => void;
-  sellerSearchTimerSeconds: number;
-  rejectReason: string | null;
-  onClearRejectReason: () => void;
-  matchConfirming: boolean;
-  sellerMatchConfirmed: boolean;
-  buyerMatchConfirmed: boolean;
-  onConfirmMatch: () => void;
-  onDeclineMatch: () => void; // passed for consistency, may be used later
-  confirmTimerSeconds: number;
-  onRejectDeposit: (reason: string) => void;
-  violationHistory: Array<{ type: string; message: string }>;
-  memberId: string;
-  onCancelSearch?: () => void;
-}) {
-  void onReset, onDeclineMatch; // reserve for future use
-  const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferConfirmChecked, setTransferConfirmChecked] = useState(false);
-  const [showSellerRejectModal, setShowSellerRejectModal] = useState(false);
-  const [sellerRejectReason, setSellerRejectReason] = useState<string | null>(null);
-  const [showViolationModal, setShowViolationModal] = useState(false);
-  const [lastSeenViolationCount, setLastSeenViolationCount] = useState(0);
-  const hasNewViolations = violationHistory.length > lastSeenViolationCount;
-
-  const sellerRejectReasonOptions = ['입금금액 불일치', '미입금', '입금정보 불일치'];
-
-  const handleTransferConfirm = () => {
-    if (!transferConfirmChecked) return;
-    setSellerConfirmed(true);
-    setShowTransferModal(false);
-    setTransferConfirmChecked(false);
-  };
-
-  const showIdleInput = (phase === 'idle' && !sellerStarted) || (phase === 'completed' && sellerClickedNew && !sellerStarted);
-  const showSearching = sellerStarted && (phase === 'idle' || phase === 'searching' || (phase === 'completed' && sellerClickedNew));
-
-  return (
-    <div className="relative min-h-full flex flex-col transition-all duration-300 ease-out">
-      {/* 모든 화면에서 고정: 회원아이디 + 위반내역 영역 (다중 매칭 구분용) */}
-      <div className="flex-shrink-0 h-10 flex items-center justify-between gap-2 px-2">
-        <span className="text-slate-400 text-[10px] sm:text-xs font-display font-bold truncate min-w-0" title={memberId}>
-          회원아이디 {memberId}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            setShowViolationModal(true);
-            setLastSeenViolationCount(violationHistory.length);
-          }}
-          className={`flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border bg-slate-800/80 transition-colors ${hasNewViolations ? 'animate-violation-btn-blink border-red-400/60' : 'border-slate-600/60 hover:border-cyan-500/50'}`}
-        >
-          위반내역
-        </button>
-      </div>
-      {(sellerStarted && phase !== 'completed') || (phase === 'completed' && !sellerClickedNew) ? (
-        <div className="flex-shrink-0 px-2 py-2 border-b border-slate-700/50 bg-slate-900/50">
-          <div className="text-point-glow text-sm font-display tracking-wider w-full drop-shadow-[0_0_12px_rgba(0,255,255,0.4)]">
-            <div className="flex justify-between items-center">
-              <span>판매금액</span>
-              <span>남은금액</span>
-            </div>
-            <div className="flex justify-between items-center mt-1">
-              <span>{sellerAmount.toLocaleString('ko-KR')}원</span>
-              <span>{phase === 'trading'
-                ? `${Math.max(0, sellerRemainingAmount - (matchResult?.totalAmount ?? 0)).toLocaleString('ko-KR')}원`
-                : `${sellerRemainingAmount.toLocaleString('ko-KR')}원`}</span>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {showViolationModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-          <div className="w-full max-w-[240px] glass-cyber p-4 border border-white/10 max-h-[80%] overflow-y-auto">
-            <p className="text-slate-100 font-bold text-sm mb-3">위반내역 (취소·거부)</p>
-            {violationHistory.length === 0 ? (
-              <p className="text-slate-400 text-xs mb-4">취소·거부 내역이 없습니다.</p>
-            ) : (
-              <ul className="space-y-2 mb-4 text-xs">
-                {violationHistory.map((item, i) => (
-                  <li key={i} className="text-slate-300">
-                    <span className="text-cyan-400 font-medium">[{item.type}]</span> {item.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowViolationModal(false)}
-              className="w-full py-2.5 rounded-xl text-sm font-medium btn-success"
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="flex-1 flex flex-col min-h-0">
-      {showIdleInput && (
-        <>
-          <div className="flex-shrink-0">
-            <section className="py-4 pt-0 mt-[1cm]">
-              <div className="text-slate-400 text-xs mb-1 font-display tracking-wider">보유 포인트</div>
-              <div className="text-point-glow text-3xl tracking-wider drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] leading-relaxed text-right">{displayPoints.toLocaleString()} P</div>
-            </section>
-            <section className="py-4">
-              <label className="block text-slate-400 text-xs mb-2 font-display tracking-wider">판매 포인트</label>
-              <div className={`flex items-center h-14 rounded-xl overflow-hidden border bg-slate-800/60 transition-all duration-300 ${hasNewViolations ? 'border-amber-500/50 opacity-75 pointer-events-none' : 'border-slate-600/60 input-wrap-glow focus-within:border-cyan-400/60 focus-within:shadow-[0_0_0_2px_rgba(6,182,212,0.2),0_0_24px_rgba(6,182,212,0.2)]'}`}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="10,000"
-                  value={sellerAmount.toLocaleString('ko-KR')}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/\D/g, '');
-                    setSellerAmount(raw === '' ? 0 : Math.min(999_999_999, Number(raw)));
-                  }}
-                  disabled={hasNewViolations}
-                  className="flex-1 min-w-0 h-full px-4 bg-transparent text-slate-100 text-base border-none outline-none placeholder:text-slate-500 font-display text-right disabled:cursor-not-allowed"
-                />
-                <span className="text-slate-400 text-sm pr-4">원</span>
-              </div>
-              <p className="text-slate-500 text-xs font-display mt-1.5">만원 단위만 가능합니다.</p>
-              {hasNewViolations && <p className="text-amber-400/90 text-xs font-display mt-1">위반내역을 확인한 후 입력 가능합니다.</p>}
-            </section>
-            <section className="py-4 mt-[1cm] flex flex-col items-center">
-              <AIBot />
-            </section>
-          </div>
-          <section className="mt-auto pt-4 pb-[0.5cm]">
-            <button
-              type="button"
-              disabled={hasNewViolations || !isValidAmount}
-              onClick={() => isValidAmount && setSellerStarted(true)}
-              className="btn-primary w-full text-sm h-14 font-display rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              AI 매칭 시작
-            </button>
-          </section>
-        </>
-      )}
-      {showSearching && (
-        <div className="flex flex-col flex-1 min-h-0 transition-opacity duration-300">
-          <div className="flex flex-col items-center justify-center flex-1 min-h-0 pt-4 space-y-6">
-            <p className="text-point-glow text-3xl font-display tabular-nums tracking-widest drop-shadow-[0_0_15px_rgba(0,255,255,0.6)]" style={{ marginTop: 'calc(5rem + 1cm - 2cm)' }} aria-label="매칭 제한 시간 (10분)">
-              {Math.floor(sellerSearchTimerSeconds / 60)}:{(sellerSearchTimerSeconds % 60).toString().padStart(2, '0')}
-            </p>
-            <div className="flex flex-col items-center space-y-6 mt-20">
-              <p className="text-slate-300 text-xs font-display tracking-wider">구매자를 검색하는 중입니다...</p>
-              <HologramGrid />
-              {phase === 'completed' && sellerClickedNew && <p className="text-slate-500 text-xs mt-2">구매자도 새 거래를 눌러 주세요</p>}
-              {phase !== 'completed' && buyerStarted && !amountsMatch && <p className="text-amber-400/90 text-xs mt-2">금액을 동일하게 맞춰 주세요</p>}
-            </div>
-          </div>
-          {onCancelSearch && (
-            <section className="mt-auto pt-4 pb-[0.5cm] flex justify-center">
-              <button
-                type="button"
-                onClick={onCancelSearch}
-                className="btn-primary px-6 py-2.5 text-sm font-display rounded-xl font-medium text-white transition-colors"
-              >
-                취소
-              </button>
-            </section>
-          )}
-        </div>
-      )}
-      {matchConfirming && matchResult && (
-        <div className="opacity-0 animate-fade-in flex flex-col flex-1 min-h-0 h-full min-h-[320px] sm:min-h-[420px] py-4 sm:py-6">
-          <div className="space-y-4 flex-shrink-0">
-            <div className="glass-card-neon p-4 leading-relaxed animate-card-border-blink">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-slate-400 text-xs">매칭금액</p>
-                <p className="text-point-glow text-base tracking-wider drop-shadow-[0_0_12px_rgba(0,255,255,0.5)]">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
-              </div>
-            </div>
-            {sellerMatchConfirmed && !buyerMatchConfirmed ? (
-              <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center">상대방 확인중입니다.</p>
-            ) : (
-              <div className="mt-[1cm]">
-                <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center mt-[1cm]">구매자가 매칭되었습니다.</p>
-                <p className="text-slate-400 text-xs text-center leading-relaxed mt-1">
-                  판매를 원하실 경우 확인버튼을 눌러주세요.
-                  <br />
-                  시간내에 확인을 누르지 않을시
-                  <br />
-                  매칭은 취소됩니다.
-                </p>
-              </div>
-            )}
-          </div>
-          <div className="flex-grow min-h-0" aria-hidden />
-          <section className="flex-shrink-0 mt-[1cm]">
-            <p className="text-point-glow text-2xl font-display tabular-nums tracking-widest drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] text-center" aria-label="확인 제한 시간 (180초)">
-              {Math.floor(confirmTimerSeconds / 60)}:{(confirmTimerSeconds % 60).toString().padStart(2, '0')}
-            </p>
-          </section>
-          <div className="flex-grow min-h-0" aria-hidden />
-          {!sellerMatchConfirmed && (
-            <div className="flex-shrink-0 mt-auto mb-5">
-              <button type="button" onClick={onConfirmMatch} className="btn-success w-full text-sm h-12 rounded-xl font-display">
-                수락
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      {phase === 'trading' && matchResult && (
-        <div className="opacity-0 animate-fade-in flex flex-col justify-between min-h-[320px] sm:min-h-[420px]">
-          <div className="space-y-4 mt-[1cm]">
-            <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center animate-text-blink">
-              {buyerDepositDone ? (
-                <>
-                  구매자가 입금하였습니다.
-                  <br />
-                  입금 내역을 확인하세요.
-                </>
-              ) : (
-                '구매자의 입금을 기다리는 중입니다.'
-              )}
-            </p>
-            <div className="glass-card-neon p-5 leading-relaxed">
-              <p className="text-slate-400 text-xs mb-2 font-display tracking-wider">입금자 정보</p>
-              <p className="text-slate-200 text-base font-medium leading-relaxed">{matchResult.buyers[0].bank}</p>
-              <p className="text-slate-400 text-sm mt-1 leading-relaxed">예금주 {matchResult.buyers[0].holder}</p>
-              <p className="text-point-glow text-xl tracking-wider mt-4 drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] whitespace-nowrap">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
-            </div>
-          </div>
-          <section className="pt-2 pb-6 flex flex-col items-center">
-            <p className="text-point-glow text-2xl font-display tabular-nums tracking-widest drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] mb-4 mt-[1cm]" aria-label="매칭·입금 제한 시간 (10분)">
-              {Math.floor(sellerSearchTimerSeconds / 60)}:{(sellerSearchTimerSeconds % 60).toString().padStart(2, '0')}
-            </p>
-            {buyerDepositDone ? (
-              sellerConfirmed ? (
-                <p className="text-cyan-400 text-xs font-display">확인 완료 · 거래 처리 중</p>
-              ) : (
-                <div className="flex gap-2 w-full mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowTransferModal(true)}
-                    className="btn-success flex-[2] text-sm h-14 rounded-xl font-display"
-                  >
-                    입금확인
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowSellerRejectModal(true)}
-                    className="flex-1 h-14 rounded-xl text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 transition-colors"
-                  >
-                    거부
-                  </button>
-                </div>
-              )
-            ) : (
-              <p className="text-slate-400 text-sm font-display tracking-wider animate-pulse flex items-center justify-center gap-1.5">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400/80 animate-pulse" style={{ animationDelay: '0ms' }} />
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400/60 animate-pulse" style={{ animationDelay: '200ms' }} />
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400/40 animate-pulse" style={{ animationDelay: '400ms' }} />
-              입금 대기 중...
-            </p>
-            )}
-          </section>
-          {/* 입금 확인·포인트 전송 확인 모달 - 판매자 화면 안에만 표시 */}
-          {showTransferModal && matchResult && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-              <div className="w-full max-w-[240px] glass-cyber p-4 border-2 border-red-500">
-                <p className="text-slate-100 font-bold text-sm mb-3">입금확인</p>
-                <div className="rounded-xl bg-slate-700/80 p-3 mb-4 text-xs">
-                  <p className="text-slate-400 mb-1">전송 정보</p>
-                  <p className="text-slate-200 font-medium">구매자 입금 확인</p>
-                  <p className="text-slate-400 mt-1">{matchResult.buyers[0].bank} · 예금주 {matchResult.buyers[0].holder}</p>
-                  <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
-                </div>
-                <label className="flex items-center gap-2 mb-4 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={transferConfirmChecked}
-                    onChange={(e) => setTransferConfirmChecked(e.target.checked)}
-                    className="rounded border-slate-500 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
-                  />
-                  <span className="text-slate-300 text-xs">입금을 확인하였습니다.</span>
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowTransferModal(false); setTransferConfirmChecked(false); }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-slate-600 text-slate-200 hover:bg-slate-500"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleTransferConfirm}
-                    disabled={!transferConfirmChecked}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium btn-success disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    확인
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {/* 판매자 입금 거부 사유 선택 모달 */}
-          {showSellerRejectModal && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-              <div className="w-full max-w-[240px] glass-cyber p-4 border-2 border-red-500">
-                <p className="text-slate-100 font-bold text-sm mb-3">거부 사유 선택</p>
-                <div className="space-y-2 mb-4">
-                  {sellerRejectReasonOptions.map((option, i) => (
-                    <label key={i} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sellerRejectReason"
-                        checked={sellerRejectReason === option}
-                        onChange={() => setSellerRejectReason(option)}
-                        className="border-slate-500 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
-                      />
-                      <span className="text-slate-300 text-sm">{i + 1}. {option}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowSellerRejectModal(false); setSellerRejectReason(null); }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-slate-600 text-slate-200 hover:bg-slate-500"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (sellerRejectReason) {
-                        onRejectDeposit(sellerRejectReason);
-                        setShowSellerRejectModal(false);
-                        setSellerRejectReason(null);
-                      }
-                    }}
-                    disabled={!sellerRejectReason}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium btn-success disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    확인
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {phase === 'completed' && !sellerClickedNew && (
-        <div className="flex flex-col justify-between min-h-[320px] sm:min-h-[420px] transition-all duration-300">
-          <section className="py-10 pt-0">
-            <p className="text-cyan-400 text-sm font-bold font-display">거래 완료</p>
-            <div className="text-point-glow text-3xl tracking-wider tabular-nums animate-count-pop drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] leading-relaxed text-right mt-4">
-              {(matchResult?.totalAmount ?? 0).toLocaleString()} P
-            </div>
-          </section>
-          <section className="py-10 pb-0">
-            <p className="text-slate-400 text-xs text-center font-display mb-3">
-              {sellerRemainingAmount > 0 ? '확인을 누르면 남은 금액 매칭을 시작합니다.' : '모든 거래가 완료되었습니다.'}
-            </p>
-            <button type="button" onClick={onNewTrade} className="btn-outline w-full h-14 text-sm font-display rounded-xl">
-              확인
-            </button>
-          </section>
-        </div>
-      )}
-      {/* 구매자 거부 사유 알림 모달 - 판매자 화면 */}
-      {rejectReason && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-          <div className="w-full max-w-[240px] glass-cyber p-4 border-white/10">
-            <p className="text-slate-100 font-bold text-sm mb-3">매칭자 거부사유</p>
-            <p className="text-slate-300 text-sm mb-4">{rejectReason}</p>
-            <button
-              type="button"
-              onClick={onClearRejectReason}
-              className="w-full py-2.5 rounded-xl text-sm font-medium btn-success"
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-      </div>
-    </div>
-  );
-}
-
-function BuyerPhoneContent({
-  buyerIndex: _buyerIndex,
-  phase,
-  buyerStarted,
-  sellerStarted,
-  showInitialScreen = false,
-  amountsMatch,
-  buyerAmount,
-  setBuyerAmount,
-  minPointAmount: _minPointAmount,
-  isValidAmount,
-  setBuyerStarted,
-  matchResult,
-  buyerDepositDone,
-  setBuyerDepositDone,
-  displayPoints,
-  completed: _completedBuyer,
-  onReset,
-  buyerClickedNew,
-  onNewTrade,
-  buyerSearchTimerSeconds,
-  onRejectMatch,
-  rejectReasonOptions,
-  matchConfirming,
-  sellerMatchConfirmed,
-  buyerMatchConfirmed,
-  onConfirmMatch,
-  onDeclineMatch,
-  confirmTimerSeconds,
-  sellerRejectDepositReason,
-  onClearSellerRejectDepositReason,
-  violationHistory,
-  memberId,
-  onCancelSearch,
-}: {
-  buyerIndex?: number;
-  phase: SimPhase;
-  buyerStarted: boolean;
-  sellerStarted: boolean;
-  showInitialScreen?: boolean;
-  amountsMatch: boolean;
-  buyerAmount: number;
-  setBuyerAmount: (n: number) => void;
-  minPointAmount: number;
-  isValidAmount: boolean;
-  setBuyerStarted: (b?: boolean) => void;
-  matchResult: ReturnType<typeof computeMatchResult> | null;
-  buyerDepositDone: boolean;
-  setBuyerDepositDone: (b: boolean) => void;
-  displayPoints: number;
-  completed: boolean;
-  onReset: () => void;
-  buyerClickedNew: boolean;
-  onNewTrade: () => void;
-  buyerSearchTimerSeconds: number;
-  onRejectMatch: (reason: string) => void;
-  rejectReasonOptions: string[];
-  matchConfirming: boolean;
-  sellerMatchConfirmed: boolean;
-  buyerMatchConfirmed: boolean;
-  onConfirmMatch: () => void;
-  onDeclineMatch: () => void;
-  confirmTimerSeconds: number;
-  sellerRejectDepositReason: string | null;
-  onClearSellerRejectDepositReason: () => void;
-  violationHistory: Array<{ type: string; message: string }>;
-  memberId: string;
-  onCancelSearch?: () => void;
-}) {
-  void onReset, onDeclineMatch; // reserve for future use
-  const [showDepositModal, setShowDepositModal] = useState(false);
-  const [depositConfirmChecked, setDepositConfirmChecked] = useState(false);
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [selectedRejectReason, setSelectedRejectReason] = useState<string | null>(null);
-  const [showViolationModal, setShowViolationModal] = useState(false);
-  const [lastSeenViolationCount, setLastSeenViolationCount] = useState(0);
-  const hasNewViolations = violationHistory.length > lastSeenViolationCount;
-
-  const handleDepositConfirm = () => {
-    if (!depositConfirmChecked) return;
-    setBuyerDepositDone(true);
-    setShowDepositModal(false);
-    setDepositConfirmChecked(false);
-  };
-
-  const showIdleInput =
-    (phase === 'idle' && !buyerStarted) ||
-    (phase === 'completed' && buyerClickedNew) ||
-    (showInitialScreen ?? false);
-
-  return (
-    <div className="relative min-h-full flex flex-col transition-all duration-300 ease-out">
-      {/* 모든 화면에서 고정: 회원아이디 + 위반내역 영역 (다중 매칭 구분용) */}
-      <div className="flex-shrink-0 h-10 flex items-center justify-between gap-2 px-2">
-        <span className="text-slate-400 text-[10px] sm:text-xs font-display font-bold truncate min-w-0" title={memberId}>
-          회원아이디 {memberId}
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            setShowViolationModal(true);
-            setLastSeenViolationCount(violationHistory.length);
-          }}
-          className={`flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border bg-slate-800/80 transition-colors ${hasNewViolations ? 'animate-violation-btn-blink border-red-400/60' : 'border-slate-600/60 hover:border-cyan-500/50'}`}
-        >
-          위반내역
-        </button>
-      </div>
-      {(buyerStarted && phase !== 'completed') || (_completedBuyer && !buyerClickedNew) ? (
-        <div className="flex-shrink-0 px-2 py-2 border-b border-slate-700/50 bg-slate-900/50">
-          <div className="text-point-glow text-sm font-display tracking-wider w-full drop-shadow-[0_0_12px_rgba(0,255,255,0.4)]">
-            <div className="flex justify-between items-center">
-              <span>신청금액</span>
-              <span>남은금액</span>
-            </div>
-            <div className="flex justify-between items-center mt-1">
-              <span>{buyerAmount.toLocaleString('ko-KR')}원</span>
-              <span>{(phase === 'trading' || phase === 'completed') ? '0원' : `${buyerAmount.toLocaleString('ko-KR')}원`}</span>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {showViolationModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-          <div className="w-full max-w-[240px] glass-cyber p-4 border border-white/10 max-h-[80%] overflow-y-auto">
-            <p className="text-slate-100 font-bold text-sm mb-3">위반내역 (취소·거부)</p>
-            {violationHistory.length === 0 ? (
-              <p className="text-slate-400 text-xs mb-4">취소·거부 내역이 없습니다.</p>
-            ) : (
-              <ul className="space-y-2 mb-4 text-xs">
-                {violationHistory.map((item, i) => (
-                  <li key={i} className="text-slate-300">
-                    <span className="text-cyan-400 font-medium">[{item.type}]</span> {item.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowViolationModal(false)}
-              className="w-full py-2.5 rounded-xl text-sm font-medium btn-success"
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-      {/* 판매자 입금 거부 사유 알림 모달 - 구매자 화면 */}
-      {sellerRejectDepositReason && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-          <div className="w-full max-w-[240px] glass-cyber p-4 border-2 border-red-500">
-            <p className="text-slate-100 font-bold text-sm mb-3">판매자 거부 사유</p>
-            <p className="text-slate-300 text-sm mb-4">{sellerRejectDepositReason}</p>
-            <button
-              type="button"
-              onClick={onClearSellerRejectDepositReason}
-              className="w-full py-2.5 rounded-xl text-sm font-medium btn-success"
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="flex-1 flex flex-col min-h-0">
-      {showIdleInput && (
-        <>
-          <div className="flex-shrink-0">
-            <section className="py-4 pt-0 mt-[1cm]">
-              <div className="text-slate-400 text-xs mb-1 font-display tracking-wider">보유 포인트</div>
-              <div className="text-point-glow text-3xl tracking-wider drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] leading-relaxed text-right">{displayPoints.toLocaleString()} P</div>
-            </section>
-            <section className="py-4">
-              <label className="block text-slate-400 text-xs mb-2 font-display tracking-wider">구매포인트</label>
-              <div className={`flex items-center h-14 rounded-xl overflow-hidden border bg-slate-800/60 transition-all duration-300 ${hasNewViolations ? 'border-amber-500/50 opacity-75 pointer-events-none' : 'border-slate-600/60 input-wrap-glow focus-within:border-cyan-400/60 focus-within:shadow-[0_0_0_2px_rgba(6,182,212,0.2),0_0_24px_rgba(6,182,212,0.2)]'}`}>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="10,000"
-                  value={buyerAmount.toLocaleString('ko-KR')}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/\D/g, '');
-                    setBuyerAmount(raw === '' ? 0 : Math.min(999_999_999, Number(raw)));
-                  }}
-                  disabled={hasNewViolations}
-                  className="flex-1 min-w-0 h-full px-4 bg-transparent text-slate-100 text-base border-none outline-none placeholder:text-slate-500 font-display text-right disabled:cursor-not-allowed"
-                />
-                <span className="text-slate-400 text-sm pr-4">원</span>
-              </div>
-              <p className="text-slate-500 text-xs font-display mt-1.5">만원 단위만 가능합니다.</p>
-              {hasNewViolations && <p className="text-amber-400/90 text-xs font-display mt-1">위반내역을 확인한 후 입력 가능합니다.</p>}
-            </section>
-            <section className="py-4 mt-[1cm] flex flex-col items-center">
-              <AIBot />
-            </section>
-          </div>
-          <section className="mt-auto pt-4 pb-[0.5cm]">
-            <button
-              type="button"
-              disabled={hasNewViolations || !isValidAmount}
-              onClick={() => isValidAmount && setBuyerStarted(true)}
-              className="btn-primary w-full text-sm h-14 font-display rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              AI 매칭 시작
-            </button>
-          </section>
-        </>
-      )}
-      {buyerStarted && phase !== 'trading' && phase !== 'completed' && !matchConfirming && (
-        <div className="flex flex-col flex-1 min-h-0 transition-opacity duration-300">
-          <div className="flex flex-col items-center justify-center flex-1 min-h-0 pt-4 space-y-6">
-            <p className="text-point-glow text-3xl font-display tabular-nums tracking-widest drop-shadow-[0_0_15px_rgba(0,255,255,0.6)]" style={{ marginTop: 'calc(5rem + 1cm - 2cm)' }} aria-label="매칭 제한 시간 (5분)">
-              {Math.floor(buyerSearchTimerSeconds / 60)}:{(buyerSearchTimerSeconds % 60).toString().padStart(2, '0')}
-            </p>
-            <div className="flex flex-col items-center space-y-6 mt-20">
-              <p className="text-slate-300 text-xs font-display tracking-wider">판매자를 검색하는 중입니다...</p>
-              <HologramGrid />
-              {sellerStarted && !amountsMatch && <p className="text-amber-400/90 text-xs mt-2">금액을 동일하게 맞춰 주세요</p>}
-            </div>
-          </div>
-          {onCancelSearch && (
-            <section className="mt-auto pt-4 pb-[0.5cm] flex justify-center">
-              <button
-                type="button"
-                onClick={onCancelSearch}
-                className="btn-primary px-6 py-2.5 text-sm font-display rounded-xl font-medium text-white transition-colors"
-              >
-                취소
-              </button>
-            </section>
-          )}
-        </div>
-      )}
-      {matchConfirming && matchResult && (
-        <div className="opacity-0 animate-fade-in flex flex-col flex-1 min-h-0 h-full min-h-[320px] sm:min-h-[420px] py-4 sm:py-6">
-          <div className="space-y-4 flex-shrink-0">
-            <div className="glass-card-neon p-4 leading-relaxed animate-card-border-blink">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-slate-400 text-xs">매칭금액</p>
-                <p className="text-point-glow text-base tracking-wider drop-shadow-[0_0_12px_rgba(0,255,255,0.5)]">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
-              </div>
-            </div>
-            {buyerMatchConfirmed && !sellerMatchConfirmed ? (
-              <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center">상대방 확인중입니다.</p>
-            ) : (
-              <div className="mt-[1cm]">
-                <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center mt-[1cm]">판매자가 매칭되었습니다.</p>
-                <p className="text-slate-400 text-xs text-center leading-relaxed mt-1">
-                  구매를 원하실 경우 확인버튼을 눌러주세요.
-                  <br />
-                  시간내에 확인을 누르지 않을시
-                  <br />
-                  매칭은 취소됩니다.
-                </p>
-              </div>
-            )}
-          </div>
-          <div className="flex-grow min-h-0" aria-hidden />
-          <section className="flex-shrink-0 mt-[1cm]">
-            <p className="text-point-glow text-2xl font-display tabular-nums tracking-widest drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] text-center" aria-label="확인 제한 시간 (180초)">
-              {Math.floor(confirmTimerSeconds / 60)}:{(confirmTimerSeconds % 60).toString().padStart(2, '0')}
-            </p>
-          </section>
-          <div className="flex-grow min-h-0" aria-hidden />
-          {!buyerMatchConfirmed && (
-            <div className="flex-shrink-0 mt-auto mb-5">
-              <button type="button" onClick={onConfirmMatch} className="btn-success w-full text-sm h-12 rounded-xl font-display">
-                수락
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      {phase === 'trading' && matchResult && (
-        <div className="opacity-0 animate-fade-in flex flex-col justify-between min-h-[320px] sm:min-h-[420px]">
-          <div className="space-y-4 mt-[1cm]">
-            <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center animate-text-blink">
-              {buyerDepositDone ? '입금확인 대기중' : '입금 후, 확인버튼을 눌러주세요'}
-            </p>
-            <div className="glass-card-neon p-5 leading-relaxed w-full">
-              <p className="text-slate-400 text-xs mb-2 font-display tracking-wider">입금정보</p>
-              <p className="text-slate-200 text-base font-medium leading-relaxed">{matchResult.seller.bank}</p>
-              <p className="font-mono text-slate-300 text-sm mt-1 leading-relaxed">{matchResult.seller.account}</p>
-              <p className="text-slate-400 text-sm mt-1 leading-relaxed">예금주 {matchResult.seller.holder}</p>
-              <p className="text-point-glow text-xl tracking-wider mt-4 drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] whitespace-nowrap">{matchResult.totalAmount.toLocaleString()} P</p>
-            </div>
-          </div>
-          <section className="py-6 flex flex-col items-center justify-center">
-            <p className="text-point-glow text-2xl font-display tabular-nums tracking-widest drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] mb-4 text-center" aria-label="입금 제한 시간 (5분)">
-              {Math.floor(buyerSearchTimerSeconds / 60)}:{(buyerSearchTimerSeconds % 60).toString().padStart(2, '0')}
-            </p>
-            <div className="mt-[1cm] w-full flex flex-col items-center">
-              {buyerDepositDone ? (
-                <p className="text-cyan-400 text-xs font-display">입금 완료</p>
-              ) : (
-                <div className="flex gap-2 w-full">
-                  <button
-                    type="button"
-                    onClick={() => setShowDepositModal(true)}
-                    className="btn-success flex-[2] text-sm h-12 rounded-xl font-display"
-                  >
-                    확인
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowRejectModal(true); setSelectedRejectReason(null); }}
-                    className="flex-1 h-12 rounded-xl text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 transition-colors"
-                  >
-                    최소
-                  </button>
-                </div>
-              )}
-            </div>
-          </section>
-          {/* 거부 사유 선택 모달 - 구매자 화면 */}
-          {showRejectModal && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-              <div className="w-full max-w-[240px] glass-cyber p-4 border-white/10">
-                <p className="text-slate-100 font-bold text-sm mb-3">거부 사유 선택</p>
-                <div className="space-y-2 mb-4">
-                  {rejectReasonOptions.map((option, i) => (
-                    <label key={i} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="rejectReason"
-                        checked={selectedRejectReason === option}
-                        onChange={() => setSelectedRejectReason(option)}
-                        className="border-slate-500 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
-                      />
-                      <span className="text-slate-300 text-sm">{i + 1}. {option}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowRejectModal(false); setSelectedRejectReason(null); }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-slate-600 text-slate-200 hover:bg-slate-500"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (selectedRejectReason) {
-                        onRejectMatch(selectedRejectReason);
-                        setShowRejectModal(false);
-                        setSelectedRejectReason(null);
-                      }
-                    }}
-                    disabled={!selectedRejectReason}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium btn-success disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    확인
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {/* 입금 확인 모달 - 구매자 화면 안에만 표시 */}
-          {showDepositModal && matchResult && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
-              <div className="w-full max-w-[240px] glass-cyber p-4 border-2 border-red-500">
-                <p className="text-slate-100 font-bold text-sm mb-3">입금확인</p>
-                <div className="rounded-xl bg-slate-700/80 p-3 mb-4 text-xs">
-                  <p className="text-slate-200 font-medium">은행: {matchResult.seller.bank}</p>
-                  <p className="font-mono text-slate-300 mt-1">계좌번호 {matchResult.seller.account}</p>
-                  <p className="text-slate-400 mt-1">예금주: {matchResult.seller.holder}</p>
-                  <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
-                </div>
-                <label className="flex items-center gap-2 mb-4 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={depositConfirmChecked}
-                    onChange={(e) => setDepositConfirmChecked(e.target.checked)}
-                    className="rounded border-slate-500 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
-                  />
-                  <span className="text-slate-300 text-xs">입금확인 완료</span>
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowDepositModal(false); setDepositConfirmChecked(false); }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-slate-600 text-slate-200 hover:bg-slate-500"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDepositConfirm}
-                    disabled={!depositConfirmChecked}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium btn-success disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    확인
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {_completedBuyer && !buyerClickedNew && (
-        <div className="flex flex-col justify-between min-h-[320px] sm:min-h-[420px] transition-all duration-300">
-          <section className="py-10 pt-0">
-            <p className="text-cyan-400 text-sm font-bold font-display">거래 완료</p>
-            <div className="text-point-glow text-3xl tracking-wider tabular-nums animate-count-pop drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] leading-relaxed text-right mt-4">
-              {(matchResult?.totalAmount ?? 0).toLocaleString()} P
-            </div>
-          </section>
-          <section className="py-10 pb-0">
-            <button type="button" onClick={onNewTrade} className="btn-outline w-full h-14 text-sm font-display rounded-xl">
-              확인
-            </button>
-          </section>
-        </div>
-      )}
       </div>
     </div>
   );

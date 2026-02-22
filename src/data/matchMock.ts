@@ -171,3 +171,5 @@ export function computeMatchResult(
     totalAmount,
   };
 }
+
+export type MatchResult = ReturnType<typeof computeMatchResult>;
