@@ -46,8 +46,8 @@ export interface SellerPhoneContentProps {
 export default function SellerPhoneContent({
   phase,
   sellerStarted,
-  buyerStarted,
-  amountsMatch,
+  buyerStarted: _buyerStarted,
+  amountsMatch: _amountsMatch,
   sellerAmount,
   sellerRemainingAmount,
   setSellerAmount,
