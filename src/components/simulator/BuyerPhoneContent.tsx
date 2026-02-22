@@ -131,7 +131,7 @@ export default function BuyerPhoneContent({
           위반내역
         </button>
       </div>
-      {(buyerStarted && phase !== 'completed') || (_completedBuyer && !buyerClickedNew) ? (
+      {buyerStarted || (_completedBuyer && !buyerClickedNew) ? (
         <div className="flex-shrink-0 px-2 py-2 border-b border-slate-700/50 bg-slate-900/50">
           <div className="text-point-glow text-sm font-display tracking-wider w-full drop-shadow-[0_0_12px_rgba(0,255,255,0.4)]">
             <div className="flex justify-between items-center">

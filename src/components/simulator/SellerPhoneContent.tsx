@@ -118,7 +118,7 @@ export default function SellerPhoneContent({
           위반내역
         </button>
       </div>
-      {(sellerStarted && phase !== 'completed') || (phase === 'completed' && !sellerClickedNew) ? (
+      {sellerStarted || (phase === 'completed' && !sellerClickedNew) ? (
         <div className="flex-shrink-0 px-2 py-2 border-b border-slate-700/50 bg-slate-900/50">
           <div className="text-point-glow text-sm font-display tracking-wider w-full drop-shadow-[0_0_12px_rgba(0,255,255,0.4)]">
             <div className="flex justify-between items-center">
@@ -215,7 +215,6 @@ export default function SellerPhoneContent({
             <div className="flex flex-col items-center space-y-6 mt-20">
               <p className="text-slate-300 text-xs font-display tracking-wider">구매자를 검색하는 중입니다...</p>
               <HologramGrid />
-              {phase === 'completed' && sellerClickedNew && <p className="text-slate-500 text-xs mt-2">구매자도 새 거래를 눌러 주세요</p>}
             </div>
           </div>
           {onCancelSearch && (

@@ -215,30 +215,34 @@ export default function App() {
     return () => clearInterval(id);
   }, [phase, matchedBuyerIndex, matchCanceledModalOpen]);
 
-  // 1) 판매자와 매칭 가능한 구매자 중 판매 금액에 가장 가까운 금액부터 매칭 → SEARCHING
+  // 1) 판매자와 매칭 가능한 구매자: idle 진입 시 잔액 있으면 잔액 기준 재매칭, 없으면 판매금액 기준 첫 매칭 → SEARCHING
   useEffect(() => {
     if (!sellerStarted || phase !== 'idle') return;
+    const useRemaining = sellerRemainingAmount > 0;
+    const refAmount = useRemaining ? sellerRemainingAmount : sellerAmount;
+    if (!isValidAmount(refAmount) && !useRemaining) return;
     const candidates: { index: number; amount: number }[] = [];
     for (let i = 0; i < buyerSlots.length; i++) {
       const slot = buyerSlots[i];
-      const matchAmount = Math.min(sellerAmount, slot.amount);
-      if (slot.started && matchAmount > 0 && isValidAmount(sellerAmount) && isValidAmount(slot.amount)) {
+      const matchAmount = Math.min(refAmount, slot.amount);
+      const withinRange = useRemaining ? slot.amount <= refAmount : true;
+      if (slot.started && matchAmount > 0 && isValidAmount(slot.amount) && withinRange && (useRemaining || isValidAmount(sellerAmount))) {
         candidates.push({ index: i, amount: slot.amount });
       }
     }
     if (candidates.length === 0) return;
     candidates.sort((a, b) => {
-      const diffA = Math.abs(a.amount - sellerAmount);
-      const diffB = Math.abs(b.amount - sellerAmount);
+      const diffA = Math.abs(a.amount - refAmount);
+      const diffB = Math.abs(b.amount - refAmount);
       return diffA !== diffB ? diffA - diffB : a.index - b.index;
     });
     const best = candidates[0];
-    setSellerRemainingAmount(sellerAmount);
+    if (!useRemaining) setSellerRemainingAmount(sellerAmount);
     setMatchedBuyerIndex(best.index);
     setPhase('searching');
-  }, [sellerStarted, phase, sellerAmount, buyerSlots]);
+  }, [sellerStarted, phase, sellerAmount, sellerRemainingAmount, buyerSlots]);
 
-  // 1b) SEARCHING 재검색 시에도 판매 남은금액에 가장 가까운 구매 금액부터 매칭 (매칭 미확인 모달 떠 있으면 중지)
+  // 1b) SEARCHING 재검색 시에도 판매 남은금액 이하(1~잔액) 구매자 중 가장 가까운 금액부터 매칭 (매칭 미확인 모달 떠 있으면 중지)
   useEffect(() => {
     if (matchCanceledModalOpen) return;
     if (phase !== 'searching' || matchedBuyerIndex !== null || !sellerStarted || sellerRemainingAmount <= 0) return;
@@ -246,7 +250,8 @@ export default function App() {
     for (let i = 0; i < buyerSlots.length; i++) {
       const slot = buyerSlots[i];
       const matchAmount = Math.min(sellerRemainingAmount, slot.amount);
-      if (slot.started && matchAmount > 0 && isValidAmount(slot.amount)) {
+      const withinRange = slot.amount <= sellerRemainingAmount;
+      if (slot.started && matchAmount > 0 && isValidAmount(slot.amount) && withinRange) {
         candidates.push({ index: i, amount: slot.amount });
       }
     }
@@ -433,10 +438,31 @@ export default function App() {
     }
   }, [phase, confirmTimerSeconds, handleDeclineMatch]);
 
-  /** 판매자 '확인' 클릭: 본인 화면만 갱신. 거래완료 화면에서는 phase/구매자 변경 없음. */
+  /** 판매자 '확인' 클릭: 본인 화면만 갱신. 거래완료 후 양쪽 모두 확인했으면 idle로 전환해 잔액 재매칭. */
   const handleSellerNewTrade = useCallback(() => {
     setSellerClickedNew(true);
     if (phase === 'completed') {
+      const idx = matchedBuyerIndex;
+      const matchedSlot = idx !== null ? buyerSlots[idx] : null;
+      if (idx !== null && matchedSlot?.clickedNew) {
+        setMatchResult(null);
+        setMatchedBuyerIndex(null);
+        setSellerConfirmed(false);
+        setSellerClickedNew(false);
+        if (sellerRemainingAmount > 0) {
+          setPhase('idle');
+          setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+        } else {
+          setPhase('idle');
+          setSellerAmount(0);
+          setSellerRemainingAmount(0);
+          setSellerStarted(false);
+          setSellerSlots((prev) =>
+            prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user } : s))
+          );
+          setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+        }
+      }
       return;
     }
     if (sellerRemainingAmount > 0) {
@@ -448,21 +474,20 @@ export default function App() {
       setSellerAmount(0);
       setSellerRemainingAmount(0);
       setSellerStarted(false);
-      const matchedSlot = matchedBuyerIndex !== null ? buyerSlots[matchedBuyerIndex] : null;
-      if (matchedSlot?.clickedNew) {
+      const idx = matchedBuyerIndex;
+      const matchedSlot = idx !== null ? buyerSlots[idx] : null;
+      if (idx !== null && matchedSlot?.clickedNew) {
         setPhase('idle');
         setMatchResult(null);
         setSellerConfirmed(false);
         setSellerClickedNew(false);
         setMatchedBuyerIndex(null);
-        setBuyerSlots((prev) =>
-          prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
-        );
+        setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
       }
     }
-  }, [phase, matchedBuyerIndex, buyerSlots, sellerRemainingAmount, simConfig.buyerSearchTimerMinutes]);
+  }, [phase, matchedBuyerIndex, buyerSlots, sellerRemainingAmount, setBuyerSlotAt, simConfig]);
 
-  /** 구매자 '확인' 클릭: 본인만 갱신. 양쪽 모두 확인했을 때만 공통 리셋(남은금액 있으면 구매자만 초기화 후 재매칭). */
+  /** 구매자 '확인' 클릭: 본인만 갱신. 양쪽 모두 확인했을 때도 해당 거래한 구매자·판매자만 리셋, 다른 구매자(2,3,4,5)는 건드리지 않음. */
   const handleBuyerNewTrade = useCallback(
     (buyerIndex: number) => {
       setBuyerSlotAt(buyerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
@@ -473,9 +498,7 @@ export default function App() {
         setSellerClickedNew(false);
         if (sellerRemainingAmount > 0) {
           setPhase('idle');
-          setBuyerSlots((prev) =>
-            prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
-          );
+          setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
         } else {
           setPhase('idle');
           setSellerAmount(0);
@@ -484,9 +507,7 @@ export default function App() {
           setSellerSlots((prev) =>
             prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user } : s))
           );
-          setBuyerSlots((prev) =>
-            prev.map((s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
-          );
+          setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
         }
       }
     },
