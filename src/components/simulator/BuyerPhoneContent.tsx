@@ -21,6 +21,10 @@ export interface BuyerPhoneContentProps {
   setBuyerDepositDone: (b: boolean) => void;
   displayPoints: number;
   completed: boolean;
+  /** 거래완료 화면에 표시할 금액 (다음 매칭으로 matchResult가 null일 때 사용) */
+  completedAmount?: number;
+  /** B2S 등: 남은금액 표시용 (있으면 신청금액/남은금액 헤더의 남은금액에 사용) */
+  displayRemainingAmount?: number;
   onReset: () => void;
   buyerClickedNew: boolean;
   onNewTrade: () => void;
@@ -62,6 +66,8 @@ export default function BuyerPhoneContent({
   setBuyerDepositDone,
   displayPoints,
   completed: _completedBuyer,
+  completedAmount = 0,
+  displayRemainingAmount,
   onReset,
   buyerClickedNew,
   onNewTrade,
@@ -101,12 +107,13 @@ export default function BuyerPhoneContent({
     setDepositConfirmChecked(false);
   };
 
-  /** 초기 화면: 미시작이면 거래/완료 단계가 아닐 때 항상 표시 (매칭 미확인 확인 후 바로 초기화면) */
+  /** 초기 화면: 미시작이면 거래/완료 단계가 아닐 때 항상 표시. 단, 거래완료 화면을 보여줄 때(확인 전)는 표시하지 않음 */
   const showIdleInput =
-    (phase === 'idle' && !buyerStarted) ||
-    (phase === 'completed' && buyerClickedNew) ||
-    (showInitialScreen ?? false) ||
-    (!buyerStarted && phase !== 'trading' && phase !== 'completed');
+    !(_completedBuyer && !buyerClickedNew) &&
+    ((phase === 'idle' && !buyerStarted) ||
+      (phase === 'completed' && buyerClickedNew) ||
+      (showInitialScreen ?? false) ||
+      (!buyerStarted && phase !== 'trading' && phase !== 'completed'));
 
   /** 매칭된 구매자만 확인/입금 화면, 비매칭 구매자는 계속 검색 중 유지 */
   const isMatchedBuyer = (phase === 'confirming' || phase === 'trading') && matchResult != null;
@@ -140,7 +147,9 @@ export default function BuyerPhoneContent({
             </div>
             <div className="flex justify-between items-center mt-1">
               <span>{buyerAmount.toLocaleString('ko-KR')}원</span>
-              <span>{(phase === 'trading' || phase === 'completed') && matchResult ? '0원' : `${buyerAmount.toLocaleString('ko-KR')}원`}</span>
+              <span>{(phase === 'trading' || phase === 'completed') && matchResult
+                ? `${Math.max(0, (displayRemainingAmount ?? buyerAmount) - matchResult.totalAmount).toLocaleString('ko-KR')}원`
+                : `${(displayRemainingAmount ?? buyerAmount).toLocaleString('ko-KR')}원`}</span>
             </div>
           </div>
         </div>
@@ -427,7 +436,7 @@ export default function BuyerPhoneContent({
           <section className="py-10 pt-0">
             <p className="text-cyan-400 text-sm font-bold font-display">거래 완료</p>
             <div className="text-point-glow text-3xl tracking-wider tabular-nums animate-count-pop drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] leading-relaxed text-right mt-4">
-              {(matchResult?.totalAmount ?? 0).toLocaleString()} P
+              {(matchResult?.totalAmount ?? completedAmount ?? 0).toLocaleString()} P
             </div>
           </section>
           <section className="py-10 pb-0">

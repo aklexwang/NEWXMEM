@@ -5,6 +5,7 @@ import { computeMatchResult } from './data/matchMock';
 import IPhoneFrame from './components/simulator/IPhoneFrame';
 import SellerPhoneContent from './components/simulator/SellerPhoneContent';
 import BuyerPhoneContent from './components/simulator/BuyerPhoneContent';
+import BuyerMultiSellerSimulator from './components/simulator/BuyerMultiSellerSimulator';
 
 const MAX_BUYERS = 5;
 const MAX_SELLERS = 5;
@@ -27,6 +28,30 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
 };
 
 export type ViolationEntry = { type: string; message: string };
+
+/** 다중 동시 매칭: 2초 대기 후 확인 단계로 올라갈 예정인 매칭 (먼저 들어온 순으로 금액 배분) */
+export type ScheduledMatch = { matchId: string; buyerIndex: number; amount: number; scheduledAt: number };
+/** 확인 단계: 건별 독립 타이머·수락/거절 */
+export type ConfirmingMatch = {
+  matchId: string;
+  buyerIndex: number;
+  amount: number;
+  confirmTimerSeconds: number;
+  buyerConfirmed: boolean;
+  sellerConfirmed: boolean;
+};
+/** 거래 중: 건별 독립 입금/입금확인 */
+export type TradingMatch = {
+  matchId: string;
+  buyerIndex: number;
+  amount: number;
+  buyerDepositDone: boolean;
+  sellerConfirmed: boolean;
+};
+
+function generateMatchId() {
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
 /** 판매자 한 명 분의 상태 (한 개의 판매자 화면) */
 export type SellerSlot = {
@@ -60,6 +85,10 @@ export type BuyerSlot = {
   started: boolean;
   depositDone: boolean;
   clickedNew: boolean;
+  /** 판매자 입금확인으로 거래가 끝난 뒤, 해당 구매자가 '확인' 누르기 전까지 거래완료 화면 유지 */
+  showCompletedScreen: boolean;
+  /** 거래완료 화면에 표시할 금액 (matchResult가 다음 매칭으로 null이 되어도 표시 유지) */
+  lastCompletedAmount: number;
   searchTimerSeconds: number;
   currentPoints: number;
   matchConfirmed: boolean;
@@ -73,6 +102,8 @@ function createInitialBuyerSlot(index: number, config: SimConfig = DEFAULT_SIM_C
     started: false,
     depositDone: false,
     clickedNew: false,
+    showCompletedScreen: false,
+    lastCompletedAmount: 0,
     searchTimerSeconds: config.buyerSearchTimerMinutes * 60,
     currentPoints: 0,
     matchConfirmed: false,
@@ -96,6 +127,15 @@ export default function App() {
   const [matchResult, setMatchResult] = useState<ReturnType<typeof computeMatchResult>>(null);
   const [sellerConfirmed, setSellerConfirmed] = useState(false);
   const [sellerClickedNew, setSellerClickedNew] = useState(false);
+  const [buyerSlots, setBuyerSlots] = useState<BuyerSlot[]>(() => [
+    createInitialBuyerSlot(0),
+  ]);
+  const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
+
+  /** 다중 동시 매칭 (판매자 1 · 구매자 N): 먼저 들어온 순 배분, 건별 독립 타이머/수락/거래 */
+  const [scheduledMatches, setScheduledMatches] = useState<ScheduledMatch[]>([]);
+  const [confirmingMatches, setConfirmingMatches] = useState<ConfirmingMatch[]>([]);
+  const [tradingMatches, setTradingMatches] = useState<TradingMatch[]>([]);
 
   const sellerAmount = sellerSlots[0]?.amount ?? 0;
   const sellerRemainingAmount = sellerSlots[0]?.remainingAmount ?? 0;
@@ -139,10 +179,6 @@ export default function App() {
   const [sellerRejectDepositReasonBuyerIndex, setSellerRejectDepositReasonBuyerIndex] = useState<number | null>(null);
   const [sellerMatchConfirmed, setSellerMatchConfirmed] = useState(false);
   const [confirmTimerSeconds, setConfirmTimerSeconds] = useState(simConfig.confirmTimerSeconds);
-  const [buyerSlots, setBuyerSlots] = useState<BuyerSlot[]>(() => [
-    createInitialBuyerSlot(0),
-  ]);
-  const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
   const [canceledMatchedBuyerIndex, setCanceledMatchedBuyerIndex] = useState<number | null>(null);
   const [sellerMatchCanceledDismissed, setSellerMatchCanceledDismissed] = useState(false);
   const [buyerMatchCanceledDismissed, setBuyerMatchCanceledDismissed] = useState(false);
@@ -160,6 +196,13 @@ export default function App() {
     Math.min(sellerRemainingAmount, matchedSlot.amount) > 0 &&
     isValidAmount(sellerRemainingAmount) &&
     isValidAmount(matchedSlot.amount);
+
+  /** 다중 동시 매칭: 예약된 금액(대기+확인+거래중) 제외한 잔액 */
+  const reservedAmount =
+    scheduledMatches.reduce((s, m) => s + m.amount, 0) +
+    confirmingMatches.reduce((s, m) => s + m.amount, 0) +
+    tradingMatches.reduce((s, m) => s + m.amount, 0);
+  const availableToMatch = Math.max(0, sellerRemainingAmount - reservedAmount);
 
   /** 매칭 미확인 모달이 떠 있는 동안(한쪽이라도 확인 전): 모든 동작 중지 */
   const matchCanceledModalOpen =
@@ -216,7 +259,9 @@ export default function App() {
   }, [phase, matchedBuyerIndex, matchCanceledModalOpen]);
 
   // 1) 판매자와 매칭 가능한 구매자: idle 진입 시 잔액 있으면 잔액 기준 재매칭, 없으면 판매금액 기준 첫 매칭 → SEARCHING
+  // 다중 동시 매칭(판매자 1명)일 때는 스킵 → phase는 'idle' 유지, 완료 시에만 'completed'로 전환
   useEffect(() => {
+    if (sellerSlots.length === 1) return; // useMultiSimultaneous: 단일 매칭 로직 사용 안 함
     if (!sellerStarted || phase !== 'idle') return;
     const useRemaining = sellerRemainingAmount > 0;
     const refAmount = useRemaining ? sellerRemainingAmount : sellerAmount;
@@ -242,9 +287,178 @@ export default function App() {
     setPhase('searching');
   }, [sellerStarted, phase, sellerAmount, sellerRemainingAmount, buyerSlots]);
 
-  // 1b) SEARCHING 재검색 시에도 판매 남은금액 이하(1~잔액) 구매자 중 가장 가까운 금액부터 매칭 (매칭 미확인 모달 떠 있으면 중지)
+  /** [다중 동시 매칭] 판매자가 AI 매칭 시작했을 때 remainingAmount가 0이면 판매금액으로 초기화 (그래야 availableToMatch > 0 되어 매칭됨) */
   useEffect(() => {
-    if (matchCanceledModalOpen) return;
+    if (sellerSlots.length !== 1 || !sellerStarted || sellerRemainingAmount > 0) return;
+    if (sellerAmount < MIN_POINT_AMOUNT || !isValidAmount(sellerAmount)) return;
+    setSellerRemainingAmount(sellerAmount);
+  }, [sellerSlots.length, sellerStarted, sellerRemainingAmount, sellerAmount]);
+
+  // [다중 동시 매칭] 판매자 검색 중·10분 내, 먼저 들어온 순(구매자 인덱스 순)으로 금액 배분해 scheduled에 추가
+  useEffect(() => {
+    if (!sellerStarted || sellerSearchTimerSeconds <= 0 || availableToMatch < MIN_POINT_AMOUNT) return;
+    setScheduledMatches((prev) => {
+      let available = sellerRemainingAmount - reservedAmount;
+      const next = [...prev];
+      for (let i = 0; i < buyerSlots.length; i++) {
+        if (available < MIN_POINT_AMOUNT) break;
+        const slot = buyerSlots[i];
+        const alreadyIn =
+          prev.some((m) => m.buyerIndex === i) ||
+          confirmingMatches.some((m) => m.buyerIndex === i) ||
+          tradingMatches.some((m) => m.buyerIndex === i);
+        if (
+          !slot.started ||
+          alreadyIn ||
+          !isValidAmount(slot.amount) ||
+          slot.amount > available
+        )
+          continue;
+        const amount = Math.min(available, slot.amount);
+        next.push({ matchId: generateMatchId(), buyerIndex: i, amount, scheduledAt: Date.now() });
+        available -= amount;
+      }
+      return next.length === prev.length ? prev : next;
+    });
+  }, [
+    sellerStarted,
+    sellerSearchTimerSeconds,
+    sellerRemainingAmount,
+    reservedAmount,
+    availableToMatch,
+    buyerSlots,
+    confirmingMatches,
+    tradingMatches,
+  ]);
+
+  // [다중 동시 매칭] 2초 지난 scheduled → confirming. scheduledMatches는 참조가 안 바뀌어도 2초 후 확인해야 하므로 주기적으로 체크
+  const [scheduledCheckTick, setScheduledCheckTick] = useState(0);
+  useEffect(() => {
+    if (scheduledMatches.length === 0) return;
+    const id = setInterval(() => {
+      setScheduledCheckTick((t) => t + 1);
+    }, 500);
+    return () => clearInterval(id);
+  }, [scheduledMatches.length]);
+  useEffect(() => {
+    if (scheduledMatches.length === 0) return;
+    const now = Date.now();
+    const ready = scheduledMatches.filter((m) => now - m.scheduledAt >= simConfig.matchDelaySeconds * 1000);
+    if (ready.length === 0) return;
+    setScheduledMatches((prev) => prev.filter((m) => now - m.scheduledAt < simConfig.matchDelaySeconds * 1000));
+    setConfirmingMatches((prev) => [
+      ...prev,
+      ...ready.map((m) => ({
+        matchId: m.matchId,
+        buyerIndex: m.buyerIndex,
+        amount: m.amount,
+        confirmTimerSeconds: simConfig.confirmTimerSeconds,
+        buyerConfirmed: false,
+        sellerConfirmed: false,
+      })),
+    ]);
+  }, [scheduledMatches, scheduledCheckTick, simConfig.matchDelaySeconds, simConfig.confirmTimerSeconds]);
+
+  const timedOutConfirmingRef = useRef<ConfirmingMatch[]>([]);
+  // [다중 동시 매칭] confirming 타이머 1초마다 감소, 0 되면 해당 건만 제거
+  useEffect(() => {
+    if (confirmingMatches.length === 0) return;
+    const id = setInterval(() => {
+      setConfirmingMatches((prev) => {
+        const next = prev.map((m) => ({ ...m, confirmTimerSeconds: Math.max(0, m.confirmTimerSeconds - 1) }));
+        const timedOut = next.filter((m) => m.confirmTimerSeconds === 0);
+        timedOutConfirmingRef.current = timedOut;
+        return next.filter((m) => m.confirmTimerSeconds > 0);
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [confirmingMatches.length]);
+  // 시간 초과된 confirming 건에 대해 위반 기록 및 구매자 초기화
+  useEffect(() => {
+    const timedOut = timedOutConfirmingRef.current;
+    if (timedOut.length === 0) return;
+    timedOutConfirmingRef.current = [];
+    const violationEntry: ViolationEntry = { type: '취소', message: '매칭 확인 시간 초과 또는 취소' };
+    timedOut.forEach((m) => {
+      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
+      setBuyerSlotAt(m.buyerIndex, (s) => ({
+        ...s,
+        started: false,
+        amount: 0,
+        depositDone: false,
+        matchConfirmed: false,
+        violationHistory: [...s.violationHistory, violationEntry],
+        searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+      }));
+    });
+  }, [confirmingMatches, setSellerSlotAt, setBuyerSlotAt, simConfig.buyerSearchTimerMinutes]);
+
+  // [다중 동시 매칭] 양쪽 모두 확인한 건 → trading으로 이동
+  useEffect(() => {
+    const both = confirmingMatches.filter((m) => m.buyerConfirmed && m.sellerConfirmed);
+    if (both.length === 0) return;
+    setConfirmingMatches((prev) => prev.filter((m) => !m.buyerConfirmed || !m.sellerConfirmed));
+    setTradingMatches((prev) => [
+      ...prev,
+      ...both.map((m) => ({
+        matchId: m.matchId,
+        buyerIndex: m.buyerIndex,
+        amount: m.amount,
+        buyerDepositDone: false,
+        sellerConfirmed: false,
+      })),
+    ]);
+    both.forEach((m) => {
+      setBuyerSlotAt(m.buyerIndex, (s) => ({ ...s, depositDone: false, matchConfirmed: false }));
+    });
+  }, [confirmingMatches, setBuyerSlotAt]);
+
+  // [다중 동시 매칭] 거래 완료: buyerDepositDone && sellerConfirmed → 잔액/포인트 반영, 해당 건 제거
+  useEffect(() => {
+    const done = tradingMatches.filter((m) => {
+      const slot = buyerSlots[m.buyerIndex];
+      return slot?.depositDone && m.sellerConfirmed;
+    });
+    if (done.length === 0) return;
+    setTradingMatches((prev) => prev.filter((m) => !done.some((d) => d.matchId === m.matchId)));
+    const totalDeduct = done.reduce((sum, m) => sum + m.amount, 0);
+    setSellerCurrentPoints((p) => p - totalDeduct);
+    setSellerRemainingAmount((p) => Math.max(0, p - totalDeduct));
+    done.forEach((m) => {
+      setBuyerSlotAt(m.buyerIndex, (prev) => ({
+        ...prev,
+        currentPoints: prev.currentPoints + m.amount,
+        started: false,
+        amount: 0,
+        depositDone: false,
+        showCompletedScreen: true,
+        lastCompletedAmount: m.amount,
+      }));
+    });
+  }, [tradingMatches, buyerSlots, setBuyerSlotAt]);
+
+  /** 판매자 1명(다중 구매자)일 땐 다중 동시 매칭, 2명 이상이면 B2S(기존 단일 매칭 로직은 B2S에서 안 씀) */
+  const useMultiSimultaneous = sellerSlots.length === 1;
+
+  // [다중 동시 매칭] 실제로 거래가 있었다가 모두 끝났을 때만 '거래 완료'로 전환 (매칭 시작 직후 remainingAmount 0인 초기 상태와 구분)
+  const hadTradingMatchesRef = useRef(false);
+  useEffect(() => {
+    if (tradingMatches.length > 0) {
+      hadTradingMatchesRef.current = true;
+      return;
+    }
+  }, [tradingMatches.length]);
+  useEffect(() => {
+    if (!useMultiSimultaneous || phase === 'completed') return;
+    if (tradingMatches.length > 0 || sellerRemainingAmount > 0 || !sellerStarted) return;
+    if (!hadTradingMatchesRef.current) return; // 한 번도 거래 중인 건이 없었으면 완료 화면으로 가지 않음
+    hadTradingMatchesRef.current = false;
+    setPhase('completed');
+  }, [useMultiSimultaneous, phase, tradingMatches.length, sellerRemainingAmount, sellerStarted]);
+
+  // 1b) [기존 단일 매칭] useMultiSimultaneous일 때는 스킵
+  useEffect(() => {
+    if (useMultiSimultaneous || matchCanceledModalOpen) return;
     if (phase !== 'searching' || matchedBuyerIndex !== null || !sellerStarted || sellerRemainingAmount <= 0) return;
     const candidates: { index: number; amount: number }[] = [];
     for (let i = 0; i < buyerSlots.length; i++) {
@@ -263,9 +477,9 @@ export default function App() {
     });
     setSellerClickedNew(false);
     setMatchedBuyerIndex(candidates[0].index);
-  }, [phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, buyerSlots, matchCanceledModalOpen]);
+  }, [useMultiSimultaneous, phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, buyerSlots, matchCanceledModalOpen]);
 
-  // 2) SEARCHING 2초 뒤 매칭 성사 → confirming (거래 금액 = min(판매 남은금액, 구매 신청금액))
+  // 2) [단일 매칭] SEARCHING 2초 뒤 매칭 성사 → confirming (다중 동시 매칭 시 스킵)
   const matchSearchRef = useRef({
     sellerRemainingAmount: 0,
     matchedBuyerIndex: null as number | null,
@@ -273,7 +487,7 @@ export default function App() {
   });
   matchSearchRef.current = { sellerRemainingAmount, matchedBuyerIndex, buyerSlots };
   useEffect(() => {
-    if (phase !== 'searching' || matchedBuyerIndex === null) return;
+    if (useMultiSimultaneous || phase !== 'searching' || matchedBuyerIndex === null) return;
     const slot = buyerSlots[matchedBuyerIndex];
     const matchAmount = Math.min(sellerRemainingAmount, slot?.amount ?? 0);
     if (!sellerStarted || !slot?.started || matchAmount <= 0) return;
@@ -290,40 +504,63 @@ export default function App() {
       setSellerConfirmed(false);
     }, simConfig.matchDelaySeconds * 1000);
     return () => clearTimeout(timer);
-    // buyerSlots 제외: 1초마다 구매자 타이머 갱신으로 인해 effect가 재실행되면 2초 타이머가 리셋되어 매칭이 안 됨
-  }, [phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, setBuyerSlotAt, simConfig.matchDelaySeconds]);
+  }, [useMultiSimultaneous, phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, setBuyerSlotAt, simConfig.matchDelaySeconds]);
 
-  // 3) 양쪽 모두 매칭 확인 시 거래(trading) 단계
+  // 3) [단일 매칭] 양쪽 모두 매칭 확인 시 거래(trading) 단계
   useEffect(() => {
-    if (phase !== 'confirming' || matchedBuyerIndex === null || !sellerMatchConfirmed) return;
+    if (useMultiSimultaneous || phase !== 'confirming' || matchedBuyerIndex === null || !sellerMatchConfirmed) return;
     const slot = buyerSlots[matchedBuyerIndex];
     if (!slot?.matchConfirmed) return;
     setPhase('trading');
     setSellerMatchConfirmed(false);
     setBuyerSlotAt(matchedBuyerIndex, (s) => ({ ...s, matchConfirmed: false }));
-  }, [phase, matchedBuyerIndex, sellerMatchConfirmed, buyerSlots, setBuyerSlotAt]);
+  }, [useMultiSimultaneous, phase, matchedBuyerIndex, sellerMatchConfirmed, buyerSlots, setBuyerSlotAt]);
 
-  // trading → completed: buyerSlots 의존 제거해 타이머가 1초마다 리셋되지 않도록
-  const tradingCompleteRef = useRef({ buyerSlots, matchedBuyerIndex, sellerConfirmed });
-  tradingCompleteRef.current = { buyerSlots, matchedBuyerIndex, sellerConfirmed };
+  // [단일 매칭] trading → completed: 판매자 입금확인 시 거래 완료
   useEffect(() => {
-    if (phase !== 'trading' || !matchResult || matchedBuyerIndex === null) return;
+    if (useMultiSimultaneous || phase !== 'trading' || !matchResult || matchedBuyerIndex === null) return;
     const slot = buyerSlots[matchedBuyerIndex];
     if (!slot?.depositDone || !sellerConfirmed) return;
     const total = matchResult.totalAmount;
     const idx = matchedBuyerIndex;
-    const t = setTimeout(() => {
-      const { buyerSlots: slots, sellerConfirmed: confirmed } = tradingCompleteRef.current;
-      if (!confirmed || idx === null) return;
-      const s = slots[idx];
-      if (!s?.depositDone) return;
-      setPhase('completed');
-      setSellerCurrentPoints((prev) => prev - total);
-      setSellerRemainingAmount((prev) => Math.max(0, prev - total));
-      setBuyerSlotAt(idx, (prev) => ({ ...prev, currentPoints: prev.currentPoints + total, started: false, amount: 0 }));
-    }, simConfig.confirmDelaySeconds * 1000);
-    return () => clearTimeout(t);
-  }, [phase, matchResult, matchedBuyerIndex, sellerConfirmed, setBuyerSlotAt, simConfig.confirmDelaySeconds]);
+    setPhase('completed');
+    setSellerCurrentPoints((prev) => prev - total);
+    setSellerRemainingAmount((prev) => Math.max(0, prev - total));
+    setBuyerSlotAt(idx, (prev) => ({
+      ...prev,
+      currentPoints: prev.currentPoints + total,
+      started: false,
+      amount: 0,
+      showCompletedScreen: true,
+      lastCompletedAmount: total,
+    }));
+  }, [useMultiSimultaneous, phase, matchResult, matchedBuyerIndex, sellerConfirmed, buyerSlots, setBuyerSlotAt]);
+
+  // [단일 매칭] completed 직후 잔액 있으면 다음 구매자와 매칭 시작
+  useEffect(() => {
+    if (useMultiSimultaneous || phase !== 'completed' || sellerRemainingAmount <= 0 || !sellerStarted) return;
+    const candidates: { index: number; amount: number }[] = [];
+    for (let i = 0; i < buyerSlots.length; i++) {
+      const slot = buyerSlots[i];
+      const matchAmount = Math.min(sellerRemainingAmount, slot.amount);
+      const withinRange = slot.amount <= sellerRemainingAmount;
+      if (slot.started && matchAmount > 0 && isValidAmount(slot.amount) && withinRange) {
+        candidates.push({ index: i, amount: slot.amount });
+      }
+    }
+    if (candidates.length === 0) return;
+    candidates.sort((a, b) => {
+      const diffA = Math.abs(a.amount - sellerRemainingAmount);
+      const diffB = Math.abs(b.amount - sellerRemainingAmount);
+      return diffA !== diffB ? diffA - diffB : a.index - b.index;
+    });
+    const best = candidates[0];
+    setMatchResult(null);
+    setSellerMatchConfirmed(false);
+    setSellerConfirmed(false);
+    setMatchedBuyerIndex(best.index);
+    setPhase('searching');
+  }, [useMultiSimultaneous, phase, sellerRemainingAmount, sellerStarted, buyerSlots]);
 
   const reset = useCallback(() => {
     setSellerSlots((prev) =>
@@ -335,6 +572,9 @@ export default function App() {
     setSellerClickedNew(false);
     setSellerMatchConfirmed(false);
     setMatchedBuyerIndex(null);
+    setScheduledMatches([]);
+    setConfirmingMatches([]);
+    setTradingMatches([]);
     setBuyerSlots((prev) =>
       prev.map((s) => ({
         ...s,
@@ -342,20 +582,70 @@ export default function App() {
         started: false,
         depositDone: false,
         clickedNew: false,
+        showCompletedScreen: false,
+        lastCompletedAmount: 0,
         matchConfirmed: false,
         searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
       }))
     );
   }, [simConfig]);
 
-  /** 매칭 확인: 판매자 확인 */
+  /** 매칭 확인: 판매자 확인 (단일) */
   const handleSellerConfirmMatch = useCallback(() => setSellerMatchConfirmed(true), []);
 
-  /** 매칭 확인: 구매자 확인 (해당 슬롯) */
+  /** 매칭 확인: 구매자 확인 (단일, 해당 슬롯) */
   const handleBuyerConfirmMatch = useCallback(
     (buyerIndex: number) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, matchConfirmed: true })),
     [setBuyerSlotAt]
   );
+
+  /** [다중 동시 매칭] 건별 판매자 수락 */
+  const handleSellerConfirmMatchMulti = useCallback((matchId: string) => {
+    setConfirmingMatches((prev) => prev.map((m) => (m.matchId === matchId ? { ...m, sellerConfirmed: true } : m)));
+  }, []);
+  /** [다중 동시 매칭] 건별 구매자 수락 */
+  const handleBuyerConfirmMatchMulti = useCallback((matchId: string) => {
+    setConfirmingMatches((prev) => prev.map((m) => (m.matchId === matchId ? { ...m, buyerConfirmed: true } : m)));
+  }, []);
+  /** [다중 동시 매칭] 건별 취소/거절: 해당 건만 제거, 위반 기록, 해당 구매자 초기화 */
+  const handleDeclineMatchMulti = useCallback(
+    (matchId: string) => {
+      const m = confirmingMatches.find((x) => x.matchId === matchId);
+      if (!m) return;
+      const violationEntry: ViolationEntry = { type: '취소', message: '매칭 확인 시간 초과 또는 취소' };
+      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
+      setBuyerSlotAt(m.buyerIndex, (s) => ({
+        ...s,
+        started: false,
+        amount: 0,
+        depositDone: false,
+        matchConfirmed: false,
+        violationHistory: [...s.violationHistory, violationEntry],
+        searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+      }));
+      setConfirmingMatches((prev) => prev.filter((x) => x.matchId !== matchId));
+    },
+    [confirmingMatches, setSellerSlotAt, setBuyerSlotAt, simConfig.buyerSearchTimerMinutes]
+  );
+  /** [다중 동시 매칭] 건별 입금확인 */
+  const handleSellerConfirmDepositMulti = useCallback((matchId: string) => {
+    setTradingMatches((prev) => prev.map((m) => (m.matchId === matchId ? { ...m, sellerConfirmed: true } : m)));
+    setTransferModalMatchId(null); // 인라인 확인 후 전역 선택 해제
+  }, []);
+
+  /** 다중 매칭 시 입금확인 모달이 열린 건 (해당 matchResult 전달용) */
+  const [transferModalMatchId, setTransferModalMatchId] = useState<string | null>(null);
+  const multiTransferMatchResult =
+    useMultiSimultaneous && transferModalMatchId
+      ? (() => {
+          const m = tradingMatches.find((x) => x.matchId === transferModalMatchId);
+          if (!m) return null;
+          const sellerUser = sellerSlots[0]?.user ?? sellerSessionUser;
+          const buyerUser = buyerSlots[m.buyerIndex]?.user;
+          if (!buyerUser) return null;
+          return computeMatchResult(sellerAmount, m.amount, sellerUser, buyerUser);
+        })()
+      : null;
 
   /** confirming 진입 시 매칭된 구매자 인덱스를 ref에 고정 (타이머 만료 시 스테일 클로저 방지) */
   const declineMatchFiredRef = useRef(false);
@@ -394,6 +684,8 @@ export default function App() {
                 amount: 0,
                 depositDone: false,
                 matchConfirmed: false,
+                showCompletedScreen: false,
+                lastCompletedAmount: 0,
                 searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
                 violationHistory: [...s.violationHistory, violationEntry],
               }
@@ -438,10 +730,29 @@ export default function App() {
     }
   }, [phase, confirmTimerSeconds, handleDeclineMatch]);
 
-  /** 판매자 '확인' 클릭: 본인 화면만 갱신. 거래완료 후 양쪽 모두 확인했으면 idle로 전환해 잔액 재매칭. */
+  /** 판매자 '확인' 클릭: 본인 화면만 갱신. 거래완료 후 확인 시 첫 화면(초기 입력)으로. */
   const handleSellerNewTrade = useCallback(() => {
     setSellerClickedNew(true);
     if (phase === 'completed') {
+      // [다중 동시 매칭] 거래 완료 후 확인 → 항상 첫 화면으로 (매칭 검색 창이 아닌 초기 화면)
+      if (sellerSlots.length === 1) {
+        setPhase('idle');
+        setSellerStarted(false);
+        setSellerAmount(0);
+        setSellerRemainingAmount(0);
+        setSellerSlots((prev) =>
+          prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user, currentPoints: s.currentPoints } : s))
+        );
+        setMatchResult(null);
+        setMatchedBuyerIndex(null);
+        setSellerConfirmed(false);
+        setSellerClickedNew(false);
+        setScheduledMatches([]);
+        setConfirmingMatches([]);
+        setTradingMatches([]);
+        return;
+      }
+      // [단일 매칭] 양쪽 모두 확인했을 때만 idle/리셋
       const idx = matchedBuyerIndex;
       const matchedSlot = idx !== null ? buyerSlots[idx] : null;
       if (idx !== null && matchedSlot?.clickedNew) {
@@ -451,16 +762,16 @@ export default function App() {
         setSellerClickedNew(false);
         if (sellerRemainingAmount > 0) {
           setPhase('idle');
-          setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+          setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, showCompletedScreen: false, lastCompletedAmount: 0, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
         } else {
           setPhase('idle');
           setSellerAmount(0);
           setSellerRemainingAmount(0);
           setSellerStarted(false);
           setSellerSlots((prev) =>
-            prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user } : s))
+            prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user, currentPoints: s.currentPoints } : s))
           );
-          setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+          setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, showCompletedScreen: false, lastCompletedAmount: 0, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
         }
       }
       return;
@@ -482,15 +793,15 @@ export default function App() {
         setSellerConfirmed(false);
         setSellerClickedNew(false);
         setMatchedBuyerIndex(null);
-        setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+        setBuyerSlotAt(idx, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, showCompletedScreen: false, lastCompletedAmount: 0, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
       }
     }
-  }, [phase, matchedBuyerIndex, buyerSlots, sellerRemainingAmount, setBuyerSlotAt, simConfig]);
+  }, [phase, matchedBuyerIndex, buyerSlots, sellerRemainingAmount, sellerSlots.length, setBuyerSlotAt, simConfig]);
 
   /** 구매자 '확인' 클릭: 본인만 갱신. 양쪽 모두 확인했을 때도 해당 거래한 구매자·판매자만 리셋, 다른 구매자(2,3,4,5)는 건드리지 않음. */
   const handleBuyerNewTrade = useCallback(
     (buyerIndex: number) => {
-      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, clickedNew: true, amount: 0, started: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, clickedNew: true, showCompletedScreen: false, lastCompletedAmount: 0, amount: 0, started: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
       if (sellerClickedNew && matchedBuyerIndex === buyerIndex) {
         setMatchResult(null);
         setMatchedBuyerIndex(null);
@@ -498,16 +809,16 @@ export default function App() {
         setSellerClickedNew(false);
         if (sellerRemainingAmount > 0) {
           setPhase('idle');
-          setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+          setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, showCompletedScreen: false, lastCompletedAmount: 0, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
         } else {
           setPhase('idle');
           setSellerAmount(0);
           setSellerRemainingAmount(0);
           setSellerStarted(false);
           setSellerSlots((prev) =>
-            prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user } : s))
+            prev.map((s, i) => (i === 0 ? { ...createInitialSellerSlot(0, simConfig), user: s.user, currentPoints: s.currentPoints } : s))
           );
-          setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
+          setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: 0, started: false, depositDone: false, clickedNew: false, showCompletedScreen: false, lastCompletedAmount: 0, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }));
         }
       }
     },
@@ -517,6 +828,8 @@ export default function App() {
   /** 판매자 매칭 검색 취소 */
   const handleCancelSellerSearch = useCallback(() => {
     setSellerStarted(false);
+    setSellerAmount(0);
+    setSellerRemainingAmount(0);
     if (phase === 'searching') {
       setPhase('idle');
       setMatchResult(null);
@@ -548,6 +861,8 @@ export default function App() {
         started: false,
         depositDone: false,
         clickedNew: false,
+        showCompletedScreen: false,
+        lastCompletedAmount: 0,
         searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
         violationHistory: [...s.violationHistory, entry],
       }));
@@ -648,6 +963,60 @@ export default function App() {
 
   const sellerDisplayPoints = sellerCurrentPoints;
 
+  /** 다중 동시 매칭 시 구매자 i의 phase, matchResult, 확인 타이머·수락/거절 props */
+  const getBuyerMultiProps = useCallback(
+    (i: number) => {
+      const slot = buyerSlots[i];
+      const sellerUser = sellerSlots[0]?.user ?? sellerSessionUser;
+      const mc = confirmingMatches.find((m) => m.buyerIndex === i);
+      const mt = tradingMatches.find((m) => m.buyerIndex === i);
+      if (mc)
+        return {
+          phase: 'confirming' as const,
+          matchResult: computeMatchResult(sellerAmount, mc.amount, sellerUser, slot.user),
+          matchConfirming: true,
+          sellerMatchConfirmed: mc.sellerConfirmed,
+          buyerMatchConfirmed: mc.buyerConfirmed,
+          confirmTimerSeconds: mc.confirmTimerSeconds,
+          onConfirmMatch: () => handleBuyerConfirmMatchMulti(mc.matchId),
+          onDeclineMatch: () => handleDeclineMatchMulti(mc.matchId),
+        };
+      if (mt)
+        return {
+          phase: 'trading' as const,
+          matchResult: computeMatchResult(sellerAmount, mt.amount, sellerUser, slot.user),
+          matchConfirming: false,
+          sellerMatchConfirmed: mt.sellerConfirmed,
+          buyerMatchConfirmed: false,
+          confirmTimerSeconds: simConfig.confirmTimerSeconds,
+          onConfirmMatch: () => handleBuyerConfirmMatch(i),
+          onDeclineMatch: handleDeclineMatch,
+        };
+      return {
+        phase: (slot.started ? 'searching' : 'idle') as SimPhase,
+        matchResult: null as ReturnType<typeof computeMatchResult>,
+        matchConfirming: false,
+        sellerMatchConfirmed: false,
+        buyerMatchConfirmed: false,
+        confirmTimerSeconds: simConfig.confirmTimerSeconds,
+        onConfirmMatch: () => handleBuyerConfirmMatch(i),
+        onDeclineMatch: handleDeclineMatch,
+      };
+    },
+    [
+      buyerSlots,
+      sellerSlots,
+      sellerAmount,
+      confirmingMatches,
+      tradingMatches,
+      handleBuyerConfirmMatchMulti,
+      handleDeclineMatchMulti,
+      handleBuyerConfirmMatch,
+      handleDeclineMatch,
+      simConfig.confirmTimerSeconds,
+    ]
+  );
+
   const updateSimConfig = useCallback(<K extends keyof SimConfig>(key: K, value: SimConfig[K]) => {
     setSimConfig((prev) => ({ ...prev, [key]: value }));
   }, []);
@@ -724,6 +1093,14 @@ export default function App() {
       </section>
 
       <div className="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 xl:gap-16 w-full max-w-[1800px]">
+        {sellerSlots.length > 1 ? (
+          <BuyerMultiSellerSimulator
+            simConfig={simConfig}
+            initialSellerCount={sellerSlots.length}
+            onSellerCountChange={(n: number) => setSellerSlots((prev) => (n <= 1 ? [createInitialSellerSlot(0, simConfig)] : prev.slice(0, n)))}
+          />
+        ) : (
+        <>
         {/* 구매자 화면 1 (제목 "1" 옆에 + 버튼, 주황 테마) */}
         <IPhoneFrame
           variant="buyer"
@@ -744,11 +1121,15 @@ export default function App() {
         >
           <BuyerPhoneContent
             buyerIndex={0}
-            phase={phase}
+            phase={useMultiSimultaneous ? getBuyerMultiProps(0).phase : phase}
             buyerStarted={buyerSlots[0].started}
             sellerStarted={sellerStarted}
-            showInitialScreen={!buyerSlots[0].started && matchedBuyerIndex !== 0}
-            amountsMatch={matchedBuyerIndex === 0 && amountsMatch}
+            showInitialScreen={
+              useMultiSimultaneous
+                ? !buyerSlots[0].started && !confirmingMatches.some((m) => m.buyerIndex === 0) && !tradingMatches.some((m) => m.buyerIndex === 0)
+                : !buyerSlots[0].started && matchedBuyerIndex !== 0
+            }
+            amountsMatch={!useMultiSimultaneous && matchedBuyerIndex === 0 && amountsMatch}
             buyerAmount={buyerSlots[0].amount}
             setBuyerAmount={(n) => setBuyerSlotAt(0, (s) => ({ ...s, amount: n }))}
             minPointAmount={MIN_POINT_AMOUNT}
@@ -756,23 +1137,24 @@ export default function App() {
             setBuyerStarted={() =>
               setBuyerSlotAt(0, (s) => ({ ...s, started: true, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
             }
-            matchResult={matchedBuyerIndex === 0 ? matchResult : null}
+            matchResult={useMultiSimultaneous ? getBuyerMultiProps(0).matchResult : (matchedBuyerIndex === 0 ? matchResult : null)}
             buyerDepositDone={buyerSlots[0].depositDone}
             setBuyerDepositDone={(b) => setBuyerSlotAt(0, (s) => ({ ...s, depositDone: b }))}
             displayPoints={buyerSlots[0].currentPoints}
-            completed={phase === 'completed' && matchedBuyerIndex === 0}
+            completed={(useMultiSimultaneous ? buyerSlots[0].showCompletedScreen : (phase === 'completed' && matchedBuyerIndex === 0)) || buyerSlots[0].showCompletedScreen}
+            completedAmount={buyerSlots[0].showCompletedScreen ? buyerSlots[0].lastCompletedAmount : (matchResult?.totalAmount ?? 0)}
             onReset={reset}
             buyerClickedNew={buyerSlots[0].clickedNew}
             onNewTrade={() => handleBuyerNewTrade(0)}
             buyerSearchTimerSeconds={buyerSlots[0].searchTimerSeconds}
             onRejectMatch={(reason) => handleRejectMatch(0, reason)}
             rejectReasonOptions={['계좌번호 불일치', '입금자명 불일치', '은행 정검시간']}
-            matchConfirming={phase === 'confirming' && matchedBuyerIndex === 0}
-            sellerMatchConfirmed={sellerMatchConfirmed}
-            buyerMatchConfirmed={buyerSlots[0].matchConfirmed}
-            onConfirmMatch={() => handleBuyerConfirmMatch(0)}
-            onDeclineMatch={handleDeclineMatch}
-            confirmTimerSeconds={confirmTimerSeconds}
+            matchConfirming={useMultiSimultaneous ? getBuyerMultiProps(0).matchConfirming : (phase === 'confirming' && matchedBuyerIndex === 0)}
+            sellerMatchConfirmed={useMultiSimultaneous ? getBuyerMultiProps(0).sellerMatchConfirmed : sellerMatchConfirmed}
+            buyerMatchConfirmed={useMultiSimultaneous ? getBuyerMultiProps(0).buyerMatchConfirmed : buyerSlots[0].matchConfirmed}
+            onConfirmMatch={useMultiSimultaneous ? getBuyerMultiProps(0).onConfirmMatch : () => handleBuyerConfirmMatch(0)}
+            onDeclineMatch={useMultiSimultaneous ? getBuyerMultiProps(0).onDeclineMatch : handleDeclineMatch}
+            confirmTimerSeconds={useMultiSimultaneous ? getBuyerMultiProps(0).confirmTimerSeconds : confirmTimerSeconds}
             sellerRejectDepositReason={
               sellerRejectDepositReasonBuyerIndex === 0 ? sellerRejectDepositReason : null
             }
@@ -820,11 +1202,15 @@ export default function App() {
             >
               <BuyerPhoneContent
                 buyerIndex={buyerIndex}
-                phase={phase}
+                phase={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).phase : phase}
                 buyerStarted={slot.started}
                 sellerStarted={sellerStarted}
-                showInitialScreen={!slot.started && matchedBuyerIndex !== buyerIndex}
-                amountsMatch={matchedBuyerIndex === buyerIndex && amountsMatch}
+                showInitialScreen={
+                  useMultiSimultaneous
+                    ? !slot.started && !confirmingMatches.some((m) => m.buyerIndex === buyerIndex) && !tradingMatches.some((m) => m.buyerIndex === buyerIndex)
+                    : !slot.started && matchedBuyerIndex !== buyerIndex
+                }
+                amountsMatch={!useMultiSimultaneous && matchedBuyerIndex === buyerIndex && amountsMatch}
                 buyerAmount={slot.amount}
                 setBuyerAmount={(n) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, amount: n }))}
                 minPointAmount={MIN_POINT_AMOUNT}
@@ -832,23 +1218,24 @@ export default function App() {
                 setBuyerStarted={() =>
                   setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: true, searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60 }))
                 }
-                matchResult={matchedBuyerIndex === buyerIndex ? matchResult : null}
+                matchResult={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).matchResult : (matchedBuyerIndex === buyerIndex ? matchResult : null)}
                 buyerDepositDone={slot.depositDone}
                 setBuyerDepositDone={(b) => setBuyerSlotAt(buyerIndex, (s) => ({ ...s, depositDone: b }))}
                 displayPoints={slot.currentPoints}
-                completed={phase === 'completed' && matchedBuyerIndex === buyerIndex}
+                completed={(useMultiSimultaneous ? slot.showCompletedScreen : (phase === 'completed' && matchedBuyerIndex === buyerIndex)) || slot.showCompletedScreen}
+                completedAmount={slot.showCompletedScreen ? slot.lastCompletedAmount : (matchResult?.totalAmount ?? 0)}
                 onReset={reset}
                 buyerClickedNew={slot.clickedNew}
                 onNewTrade={() => handleBuyerNewTrade(buyerIndex)}
                 buyerSearchTimerSeconds={slot.searchTimerSeconds}
                 onRejectMatch={(reason) => handleRejectMatch(buyerIndex, reason)}
                 rejectReasonOptions={['계좌번호 불일치', '입금자명 불일치', '은행 정검시간']}
-                matchConfirming={phase === 'confirming' && matchedBuyerIndex === buyerIndex}
-                sellerMatchConfirmed={sellerMatchConfirmed}
-                buyerMatchConfirmed={slot.matchConfirmed}
-                onConfirmMatch={() => handleBuyerConfirmMatch(buyerIndex)}
-                onDeclineMatch={handleDeclineMatch}
-                confirmTimerSeconds={confirmTimerSeconds}
+                matchConfirming={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).matchConfirming : (phase === 'confirming' && matchedBuyerIndex === buyerIndex)}
+                sellerMatchConfirmed={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).sellerMatchConfirmed : sellerMatchConfirmed}
+                buyerMatchConfirmed={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).buyerMatchConfirmed : slot.matchConfirmed}
+                onConfirmMatch={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).onConfirmMatch : () => handleBuyerConfirmMatch(buyerIndex)}
+                onDeclineMatch={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).onDeclineMatch : handleDeclineMatch}
+                confirmTimerSeconds={useMultiSimultaneous ? getBuyerMultiProps(buyerIndex).confirmTimerSeconds : confirmTimerSeconds}
                 sellerRejectDepositReason={
                   sellerRejectDepositReasonBuyerIndex === buyerIndex ? sellerRejectDepositReason : null
                 }
@@ -930,6 +1317,21 @@ export default function App() {
             onConfirmMatchCanceledModal={() => handleMatchCanceledConfirm('seller')}
             matchCanceledModalTitle={canceledSellerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
             matchCanceledModalSubtitle={canceledSellerHadConfirmed ? '구매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
+            multiConfirmingMatches={useMultiSimultaneous ? confirmingMatches : undefined}
+            multiTradingMatches={
+              useMultiSimultaneous
+                ? tradingMatches.map((m) => ({
+                    ...m,
+                    buyerDepositDone: buyerSlots[m.buyerIndex]?.depositDone ?? m.buyerDepositDone,
+                  }))
+                : undefined
+            }
+            buyerMemberIds={useMultiSimultaneous ? buyerSlots.map((s) => s.user.id) : undefined}
+            onConfirmMatchMulti={useMultiSimultaneous ? handleSellerConfirmMatchMulti : undefined}
+            onDeclineMatchMulti={useMultiSimultaneous ? handleDeclineMatchMulti : undefined}
+            onSellerConfirmDepositMulti={useMultiSimultaneous ? handleSellerConfirmDepositMulti : undefined}
+            multiTransferMatchResult={multiTransferMatchResult ?? undefined}
+            onOpenTransferModal={useMultiSimultaneous ? setTransferModalMatchId : undefined}
           />
         </IPhoneFrame>
         {/* 판매자 화면 2~5 (제목 옆에 - 삭제 버튼) */}
@@ -983,10 +1385,15 @@ export default function App() {
                 onRejectDeposit={() => {}}
                 violationHistory={slot.violationHistory ?? []}
                 memberId={slot.user.id}
+                onCancelSearch={() =>
+                  setSellerSlotAt(sellerIndex, (s) => ({ ...s, started: false, amount: 0, remainingAmount: 0, searchTimerSeconds: simConfig.sellerSearchTimerMinutes * 60 }))
+                }
               />
             </IPhoneFrame>
           );
         })}
+        </>
+        )}
       </div>
     </div>
   );

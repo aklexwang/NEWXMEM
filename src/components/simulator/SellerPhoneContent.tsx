@@ -15,7 +15,7 @@ export interface SellerPhoneContentProps {
   minPointAmount: number;
   isValidAmount: boolean;
   setSellerStarted: (b: boolean) => void;
-  matchResult: MatchResult;
+  matchResult: MatchResult | null;
   buyerDepositDone: boolean;
   sellerConfirmed: boolean;
   setSellerConfirmed: (b: boolean) => void;
@@ -41,6 +41,30 @@ export interface SellerPhoneContentProps {
   onConfirmMatchCanceledModal?: () => void;
   matchCanceledModalTitle?: string;
   matchCanceledModalSubtitle?: string;
+  /** 다중 동시 매칭: 확인 대기 건 목록 (건별 타이머·수락) */
+  multiConfirmingMatches?: Array<{
+    matchId: string;
+    buyerIndex: number;
+    amount: number;
+    confirmTimerSeconds: number;
+    buyerConfirmed: boolean;
+    sellerConfirmed: boolean;
+  }>;
+  /** 다중 동시 매칭: 거래 중 건 목록 (건별 입금확인) */
+  multiTradingMatches?: Array<{
+    matchId: string;
+    buyerIndex: number;
+    amount: number;
+    buyerDepositDone: boolean;
+    sellerConfirmed: boolean;
+  }>;
+  buyerMemberIds?: string[];
+  onConfirmMatchMulti?: (matchId: string) => void;
+  onDeclineMatchMulti?: (matchId: string) => void;
+  onSellerConfirmDepositMulti?: (matchId: string) => void;
+  /** 다중 매칭 시 입금확인 모달용 matchResult (현재 선택된 건) */
+  multiTransferMatchResult?: MatchResult | null;
+  onOpenTransferModal?: (matchId: string) => void;
 }
 
 export default function SellerPhoneContent({
@@ -80,10 +104,21 @@ export default function SellerPhoneContent({
   onConfirmMatchCanceledModal,
   matchCanceledModalTitle = '매칭 미확인',
   matchCanceledModalSubtitle = '3회이상 매칭확인 거부시 이용이 중지됨',
+  multiConfirmingMatches,
+  multiTradingMatches,
+  buyerMemberIds = [],
+  onConfirmMatchMulti,
+  onDeclineMatchMulti,
+  onSellerConfirmDepositMulti,
+  multiTransferMatchResult,
+  onOpenTransferModal,
 }: SellerPhoneContentProps) {
   void onReset, onDeclineMatch;
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferModalMatchId, setTransferModalMatchId] = useState<string | null>(null);
   const [transferConfirmChecked, setTransferConfirmChecked] = useState(false);
+  /** 다중 매칭 카드 내 입금확인 2차 확인용 (모달 대신 해당 카드 안에서 처리) */
+  const [inlineDepositConfirmMatchId, setInlineDepositConfirmMatchId] = useState<string | null>(null);
   const [showSellerRejectModal, setShowSellerRejectModal] = useState(false);
   const [sellerRejectReason, setSellerRejectReason] = useState<string | null>(null);
   const [showViolationModal, setShowViolationModal] = useState(false);
@@ -94,13 +129,25 @@ export default function SellerPhoneContent({
 
   const handleTransferConfirm = () => {
     if (!transferConfirmChecked) return;
-    setSellerConfirmed(true);
+    if (transferModalMatchId && onSellerConfirmDepositMulti) {
+      onSellerConfirmDepositMulti(transferModalMatchId);
+      setTransferModalMatchId(null);
+    } else {
+      setSellerConfirmed(true);
+    }
     setShowTransferModal(false);
     setTransferConfirmChecked(false);
   };
 
-  const showIdleInput = (phase === 'idle' && !sellerStarted) || (phase === 'completed' && sellerClickedNew && !sellerStarted);
-  const showSearching = sellerStarted && (phase === 'idle' || phase === 'searching' || (phase === 'completed' && sellerClickedNew));
+  /** B2S(구매자1·다중판매자)에서 판매자 거래완료 화면 표시 시에는 초기 화면 숨김 */
+  const showIdleInput =
+    !(_completed && !sellerClickedNew) &&
+    ((phase === 'idle' && !sellerStarted) || (phase === 'completed' && sellerClickedNew && !sellerStarted));
+  const hasMultiCards = (multiConfirmingMatches?.length ?? 0) + (multiTradingMatches?.length ?? 0) > 0;
+  const showSearching =
+    sellerStarted &&
+    (phase === 'idle' || phase === 'searching' || (phase === 'completed' && sellerClickedNew)) &&
+    !hasMultiCards;
 
   const matchCanceledModalOpen = Boolean(showMatchCanceledModal && onConfirmMatchCanceledModal);
   return (
@@ -118,7 +165,7 @@ export default function SellerPhoneContent({
           위반내역
         </button>
       </div>
-      {sellerStarted || (phase === 'completed' && !sellerClickedNew) ? (
+      {(sellerStarted || ((phase === 'completed' || _completed) && !sellerClickedNew) || (multiConfirmingMatches?.length ?? 0) + (multiTradingMatches?.length ?? 0) > 0) ? (
         <div className="flex-shrink-0 px-2 py-2 border-b border-slate-700/50 bg-slate-900/50">
           <div className="text-point-glow text-sm font-display tracking-wider w-full drop-shadow-[0_0_12px_rgba(0,255,255,0.4)]">
             <div className="flex justify-between items-center">
@@ -127,7 +174,7 @@ export default function SellerPhoneContent({
             </div>
             <div className="flex justify-between items-center mt-1">
               <span>{sellerAmount.toLocaleString('ko-KR')}원</span>
-              <span>{phase === 'trading'
+              <span>{phase === 'trading' && !multiTradingMatches?.length
                 ? `${Math.max(0, sellerRemainingAmount - (matchResult?.totalAmount ?? 0)).toLocaleString('ko-KR')}원`
                 : `${sellerRemainingAmount.toLocaleString('ko-KR')}원`}</span>
             </div>
@@ -208,7 +255,7 @@ export default function SellerPhoneContent({
       )}
       {showSearching && (
         <div className="flex flex-col flex-1 min-h-0 transition-opacity duration-300">
-          <div className="flex flex-col items-center justify-center flex-1 min-h-0 pt-4 space-y-6">
+          <div className="flex flex-col items-center justify-center flex-1 min-h-0 pt-4 space-y-6 min-h-0 overflow-auto">
             <p className="text-point-glow text-3xl font-display tabular-nums tracking-widest drop-shadow-[0_0_15px_rgba(0,255,255,0.6)]" style={{ marginTop: 'calc(5rem + 1cm - 2cm)' }} aria-label="매칭 제한 시간 (10분)">
               {Math.floor(sellerSearchTimerSeconds / 60)}:{(sellerSearchTimerSeconds % 60).toString().padStart(2, '0')}
             </p>
@@ -218,7 +265,7 @@ export default function SellerPhoneContent({
             </div>
           </div>
           {onCancelSearch && (
-            <section className="mt-auto pt-4 pb-[0.5cm] flex justify-center">
+            <section className="flex-shrink-0 mt-auto pt-4 pb-[0.5cm] flex justify-center">
               <button
                 type="button"
                 onClick={onCancelSearch}
@@ -230,7 +277,116 @@ export default function SellerPhoneContent({
           )}
         </div>
       )}
-      {matchConfirming && matchResult && (
+      {/* 다중 동시 매칭: 확인 대기 카드 + 거래 중 카드 */}
+      {(multiConfirmingMatches && multiConfirmingMatches.length > 0) || (multiTradingMatches && multiTradingMatches.length > 0) ? (
+        <div className="flex-1 flex flex-col min-h-0 overflow-auto py-3 space-y-3">
+          {multiConfirmingMatches?.map((m) => (
+            <div
+              key={m.matchId}
+              className="flex-shrink-0 glass-card-neon p-4 rounded-xl border border-cyan-500/30 space-y-3"
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 text-xs font-display">회원아이디 {buyerMemberIds[m.buyerIndex] ?? `buyer-${m.buyerIndex + 1}`}</span>
+                <span className="text-point-glow text-lg font-display tabular-nums">{Math.floor(m.confirmTimerSeconds / 60)}:{(m.confirmTimerSeconds % 60).toString().padStart(2, '0')}</span>
+              </div>
+              <p className="text-slate-300 text-sm">매칭금액 {m.amount.toLocaleString('ko-KR')}원</p>
+              <p className="text-cyan-400 text-xs">구매자가 매칭되었습니다. 판매를 원하실 경우 확인버튼을 눌러주세요.</p>
+              {!m.sellerConfirmed && onConfirmMatchMulti && (
+                <button type="button" onClick={() => onConfirmMatchMulti(m.matchId)} className="btn-success w-full text-sm h-10 rounded-lg font-display">
+                  수락
+                </button>
+              )}
+              {onDeclineMatchMulti && (
+                <button type="button" onClick={() => onDeclineMatchMulti(m.matchId)} className="w-full text-sm h-9 rounded-lg font-display text-slate-400 border border-slate-500/50 hover:bg-slate-700/50">
+                  거절
+                </button>
+              )}
+            </div>
+          ))}
+          {multiTradingMatches?.map((m) => (
+            <div
+              key={m.matchId}
+              className="flex-shrink-0 glass-card-neon p-4 rounded-xl border border-cyan-500/30 space-y-3"
+            >
+              <span className="text-slate-400 text-xs font-display">회원아이디 {buyerMemberIds[m.buyerIndex] ?? `buyer-${m.buyerIndex + 1}`}</span>
+              <p className="text-slate-300 text-sm">매칭금액 {m.amount.toLocaleString('ko-KR')}원</p>
+              {m.buyerDepositDone ? (
+                m.sellerConfirmed ? (
+                  <p className="text-cyan-400 text-xs">확인 완료 · 거래 처리 중</p>
+                ) : inlineDepositConfirmMatchId === m.matchId ? (
+                  /* 카드 안 2차 확인: 모달 없이 인라인 처리 */
+                  <div className="space-y-3 pt-1">
+                    {multiTransferMatchResult && (
+                      <div className="rounded-lg bg-slate-700/80 p-3 text-xs">
+                        <p className="text-slate-400 mb-1">입금 정보</p>
+                        <p className="text-slate-200 font-medium">{multiTransferMatchResult.buyers[0].bank} · 예금주 {multiTransferMatchResult.buyers[0].holder}</p>
+                        <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{multiTransferMatchResult.totalAmount.toLocaleString('ko-KR')}원</p>
+                      </div>
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={transferConfirmChecked}
+                        onChange={(e) => setTransferConfirmChecked(e.target.checked)}
+                        className="rounded border-slate-500 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
+                      />
+                      <span className="text-slate-300 text-xs">입금을 확인하였습니다.</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setInlineDepositConfirmMatchId(null); setTransferConfirmChecked(false); }}
+                        className="flex-1 py-2 rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500"
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!transferConfirmChecked) return;
+                          onSellerConfirmDepositMulti?.(m.matchId);
+                          setInlineDepositConfirmMatchId(null);
+                          setTransferConfirmChecked(false);
+                        }}
+                        disabled={!transferConfirmChecked}
+                        className="flex-1 py-2 rounded-lg text-sm font-display font-medium btn-success disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        확인
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setTransferConfirmChecked(false);
+                        setInlineDepositConfirmMatchId(m.matchId);
+                        onOpenTransferModal?.(m.matchId);
+                      }}
+                      className="btn-success flex-1 text-sm min-h-[44px] rounded-lg font-display cursor-pointer touch-manipulation select-none"
+                    >
+                      입금확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSellerRejectModal(true)}
+                      className="flex-1 min-h-[44px] rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 cursor-pointer touch-manipulation"
+                    >
+                      거부
+                    </button>
+                  </div>
+                )
+              ) : (
+                <p className="text-slate-400 text-xs animate-pulse">입금 대기 중...</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {matchConfirming && matchResult && !(multiConfirmingMatches && multiConfirmingMatches.length > 0) && (
         <div className="opacity-0 animate-fade-in flex flex-col flex-1 min-h-0 h-full min-h-[320px] sm:min-h-[420px] py-4 sm:py-6">
           <div className="space-y-4 flex-shrink-0">
             <div className="glass-card-neon p-4 leading-relaxed animate-card-border-blink">
@@ -270,7 +426,7 @@ export default function SellerPhoneContent({
           )}
         </div>
       )}
-      {phase === 'trading' && matchResult && (
+      {phase === 'trading' && matchResult && !(multiTradingMatches && multiTradingMatches.length > 0) && (
         <div className="opacity-0 animate-fade-in flex flex-col justify-between min-h-[320px] sm:min-h-[420px]">
           <div className="space-y-4 mt-[1cm]">
             <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center animate-text-blink">
@@ -325,15 +481,15 @@ export default function SellerPhoneContent({
             </p>
             )}
           </section>
-          {showTransferModal && matchResult && (
+          {showTransferModal && !inlineDepositConfirmMatchId && (multiTransferMatchResult ?? matchResult) && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
               <div className="w-full max-w-[240px] glass-cyber p-4 border-2 border-red-500">
                 <p className="text-slate-100 font-bold text-sm mb-3">입금확인</p>
                 <div className="rounded-xl bg-slate-700/80 p-3 mb-4 text-xs">
                   <p className="text-slate-400 mb-1">전송 정보</p>
                   <p className="text-slate-200 font-medium">구매자 입금 확인</p>
-                  <p className="text-slate-400 mt-1">{matchResult.buyers[0].bank} · 예금주 {matchResult.buyers[0].holder}</p>
-                  <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
+                  <p className="text-slate-400 mt-1">{(multiTransferMatchResult ?? matchResult)!.buyers[0].bank} · 예금주 {(multiTransferMatchResult ?? matchResult)!.buyers[0].holder}</p>
+                  <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{(multiTransferMatchResult ?? matchResult)!.totalAmount.toLocaleString('ko-KR')}원</p>
                 </div>
                 <label className="flex items-center gap-2 mb-4 cursor-pointer">
                   <input
@@ -410,12 +566,13 @@ export default function SellerPhoneContent({
           )}
         </div>
       )}
-      {phase === 'completed' && !sellerClickedNew && (
+      {((phase === 'completed' || _completed) && !sellerClickedNew) && (
         <div className="flex flex-col justify-between min-h-[320px] sm:min-h-[420px] transition-all duration-300">
           <section className="py-10 pt-0">
             <p className="text-cyan-400 text-sm font-bold font-display">거래 완료</p>
+            <p className="text-slate-400 text-xs font-display mt-2">보유 포인트</p>
             <div className="text-point-glow text-3xl tracking-wider tabular-nums animate-count-pop drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] leading-relaxed text-right mt-4">
-              {(matchResult?.totalAmount ?? 0).toLocaleString()} P
+              {displayPoints.toLocaleString()} P
             </div>
           </section>
           <section className="py-10 pb-0">
