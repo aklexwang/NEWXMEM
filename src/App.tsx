@@ -168,6 +168,7 @@ export default function App() {
   }, []);
 
   /** 판매자는 보유 포인트를 초과해 판매 불가 */
+  /** 구매자는 보유 포인트를 초과해도 구매 신청 가능 (금액 상한 없음) */
   const setSellerAmount = useCallback(
     (n: number) => setSellerSlotAt(0, (s) => ({ ...s, amount: Math.min(n, s.currentPoints) })),
     [setSellerSlotAt]

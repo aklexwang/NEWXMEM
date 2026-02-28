@@ -429,24 +429,18 @@ export default function SellerPhoneContent({
                 </div>
                 <p className="text-slate-400 text-xs">
                   구매자가 매칭되었습니다.
-                  {buyerMemberIds[item.buyerIndex] != null && (
-                    <>
-                      <br />
-                      <span className="text-slate-300">매칭 구매자: {buyerMemberIds[item.buyerIndex]}</span>
-                    </>
-                  )}
                   <br />
                   판매를 원하시면 승인을 눌러주세요.
                 </p>
                 {!item.sellerConfirmed && (onConfirmMatchMulti || onDeclineMatchMulti) && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-stretch">
                     {onConfirmMatchMulti && (
-                      <button type="button" onClick={() => onConfirmMatchMulti(item.matchId)} className="btn-success flex-1 text-sm h-9 rounded-lg font-display">
+                      <button type="button" onClick={() => onConfirmMatchMulti(item.matchId)} className="btn-success flex-1 text-sm h-9 min-h-[2.25rem] rounded-lg font-display flex items-center justify-center py-0">
                         승인
                       </button>
                     )}
                     {onDeclineMatchMulti && (
-                      <button type="button" onClick={() => onDeclineMatchMulti(item.matchId)} className="flex-1 h-9 rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50">
+                      <button type="button" onClick={() => onDeclineMatchMulti(item.matchId)} className="flex-1 h-9 min-h-[2.25rem] rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 flex items-center justify-center">
                         거절
                       </button>
                     )}
@@ -469,7 +463,11 @@ export default function SellerPhoneContent({
               {item.canceledReason === 'buyer_deposit_timeout' ? (
                 <p className="text-amber-400/90 text-xs font-display text-center py-1">매칭이 취소되었습니다.</p>
               ) : item.buyerDepositDone ? (
-                item.sellerConfirmed ? (
+                <>
+                  <p className="text-cyan-400/90 text-xs font-display text-center w-full py-1.5 animate-deposit-text-twinkle drop-shadow-[0_0_12px_rgba(34,211,238,0.5)]">
+                    {inlineDepositConfirmMatchId === item.matchId ? '입금을 정확히 확인하였습니까?' : '구매자가 입금하였습니다.'}
+                  </p>
+                  {item.sellerConfirmed ? (
                   /* 해당 건 확인 버튼 누른 뒤 카드 안에 거래완료 화면 */
                   <div className="rounded-lg bg-slate-800/80 border border-cyan-500/20 p-4 space-y-3">
                     <p className="text-cyan-400 text-sm font-bold font-display">거래 완료</p>
@@ -485,7 +483,6 @@ export default function SellerPhoneContent({
                       <div className="rounded-lg bg-slate-700/80 p-3 text-xs">
                         <p className="text-slate-400 mb-1">입금 정보</p>
                         <p className="text-slate-200 font-medium">{multiTransferMatchResult.buyers[0].bank} · 예금주 {multiTransferMatchResult.buyers[0].holder}</p>
-                        <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{multiTransferMatchResult.totalAmount.toLocaleString('ko-KR')}원</p>
                       </div>
                     )}
                     {sellerDepositPhotoEnabled && (
@@ -551,7 +548,7 @@ export default function SellerPhoneContent({
                         확인
                       </button>
                     </div>
-                  </div>
+                    </div>
                 ) : (
                   <div className="flex gap-2">
                     <button
@@ -575,7 +572,8 @@ export default function SellerPhoneContent({
                       거부
                     </button>
                   </div>
-                )
+                )}
+                </>
               ) : (
                 <p className="text-slate-400 text-xs">입금 대기 중...</p>
               )}
@@ -598,9 +596,6 @@ export default function SellerPhoneContent({
             ) : (
               <div className="mt-[1cm]">
                 <p className="text-cyan-400 text-sm font-bold font-display drop-shadow-[0_0_10px_rgba(0,255,255,0.4)] text-center mt-[1cm]">구매자가 매칭되었습니다.</p>
-                {matchResult.buyers[0] && (
-                  <p className="text-slate-300 text-xs text-center mt-1 font-display">매칭 구매자: {matchResult.buyers[0].id}</p>
-                )}
                 <p className="text-slate-400 text-xs text-center leading-relaxed mt-1">
                   판매를 원하실 경우 승인을 눌러주세요.
                   <br />
@@ -645,7 +640,6 @@ export default function SellerPhoneContent({
               <p className="text-slate-400 text-xs mb-2 font-display tracking-wider">입금자 정보</p>
               <p className="text-slate-200 text-base font-medium leading-relaxed">{matchResult.buyers[0].bank}</p>
               <p className="text-slate-400 text-sm mt-1 leading-relaxed">예금주 {matchResult.buyers[0].holder}</p>
-              <p className="text-point-glow text-xl tracking-wider mt-4 drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] whitespace-nowrap">{matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
             </div>
           </div>
           <section className="pt-2 pb-6 flex flex-col items-center">
@@ -690,7 +684,6 @@ export default function SellerPhoneContent({
                   <p className="text-slate-400 mb-1">전송 정보</p>
                   <p className="text-slate-200 font-medium">구매자 입금 확인</p>
                   <p className="text-slate-400 mt-1">{(multiTransferMatchResult ?? matchResult)!.buyers[0].bank} · 예금주 {(multiTransferMatchResult ?? matchResult)!.buyers[0].holder}</p>
-                  <p className="text-point-glow mt-2 drop-shadow-[0_0_8px_rgba(0,255,255,0.3)]">{(multiTransferMatchResult ?? matchResult)!.totalAmount.toLocaleString('ko-KR')}원</p>
                 </div>
                 {sellerDepositPhotoEnabled && (
                   <div className="flex flex-col gap-2 mb-4">

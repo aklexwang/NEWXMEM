@@ -356,7 +356,7 @@ export default function BuyerPhoneContent({
                 />
                 <span className="text-slate-400 text-sm pr-4">원</span>
               </div>
-              <p className="text-slate-500 text-xs font-display mt-1.5">만원 단위만 가능합니다.</p>
+              <p className="text-slate-500 text-xs font-display mt-1.5">만원 단위만 가능합니다. 보유 포인트 이상도 구매 신청 가능합니다.</p>
               {hasNewViolations && <p className="text-amber-400/90 text-xs font-display mt-1">위반내역을 확인한 후 입력 가능합니다.</p>}
             </section>
             <section className="py-4 mt-[1cm] flex flex-col items-center">
@@ -421,7 +421,17 @@ export default function BuyerPhoneContent({
                   <p className="text-slate-300 text-sm">매칭금액 {item.amount.toLocaleString('ko-KR')}원</p>
                   <span className="text-point-glow text-lg font-display tabular-nums">{Math.floor(item.confirmTimerSeconds / 60)}:{(item.confirmTimerSeconds % 60).toString().padStart(2, '0')}</span>
                 </div>
-                <p className="text-cyan-400 text-xs">판매자가 매칭되었습니다. 구매를 원하실 경우 승인을 눌러주세요.</p>
+                <p className="text-cyan-400 text-xs">
+                  {item.buyerConfirmed ? (
+                    '판매자 승인을 기다리고 있습니다.'
+                  ) : (
+                    <>
+                      판매자가 매칭되었습니다.
+                      <br />
+                      구매를 원하실 경우 승인을 눌러주세요.
+                    </>
+                  )}
+                </p>
                 {!item.buyerConfirmed && (onConfirmMatchMulti || onDeclineMatchMulti) && (
                   <div className="flex gap-2 mt-2">
                     {onConfirmMatchMulti && (
@@ -457,12 +467,11 @@ export default function BuyerPhoneContent({
                 ) : (
                   <>
                     {item.matchResult && (
-                      <div className="rounded-lg bg-slate-700/80 p-3 text-xs mb-2">
-                        <p className="text-slate-400 mb-1">입금 정보</p>
+                      <div className="rounded-lg bg-slate-700/80 p-3 text-xs mb-2 text-center">
+                        <p className="text-slate-400 mb-1 animate-deposit-guide-glow">아래 계좌로 입금하세요</p>
                         <p className="text-slate-200 font-medium">{item.matchResult.seller.bank}</p>
                         <p className="font-mono text-slate-300 text-sm mt-0.5">{item.matchResult.seller.account}</p>
                         <p className="text-slate-400 text-xs mt-0.5">예금주 {item.matchResult.seller.holder}</p>
-                        <p className="text-point-glow mt-2">{item.matchResult.totalAmount.toLocaleString('ko-KR')}원</p>
                       </div>
                     )}
                     {setBuyerDepositDoneMulti && item.matchResult && (
@@ -503,9 +512,8 @@ export default function BuyerPhoneContent({
       {depositModalForMulti && depositModalForMulti.matchResult && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 rounded-2xl">
           <div className="w-full max-w-[280px] glass-cyber border-2 border-red-500 rounded-2xl px-5 py-6 flex flex-col gap-6">
-            <p className="text-slate-100 font-bold text-base text-center">입금확인</p>
+            <p className="text-slate-100 font-bold text-base text-center">입금을 완료하였습니까?</p>
             <div className="rounded-xl bg-slate-700/80 px-4 py-5 text-center space-y-3">
-              <p className="text-slate-400 text-xs font-display tracking-wider">은행</p>
               <p className="text-slate-100 font-medium text-sm">{depositModalForMulti.matchResult.seller.bank}</p>
               <p className="font-mono text-slate-300 text-sm tracking-wide">{depositModalForMulti.matchResult.seller.account}</p>
               <p className="text-slate-400 text-sm">예금주 {depositModalForMulti.matchResult.seller.holder}</p>
@@ -647,7 +655,6 @@ export default function BuyerPhoneContent({
               <p className="text-slate-200 text-base font-medium leading-relaxed">{matchResult.seller.bank}</p>
               <p className="font-mono text-slate-300 text-sm mt-1 leading-relaxed">{matchResult.seller.account}</p>
               <p className="text-slate-400 text-sm mt-1 leading-relaxed">예금주 {matchResult.seller.holder}</p>
-              <p className="text-point-glow text-xl tracking-wider mt-4 drop-shadow-[0_0_12px_rgba(0,255,255,0.5)] whitespace-nowrap">{matchResult.totalAmount.toLocaleString()} P</p>
             </div>
           </div>
           <section className="py-6 flex flex-col items-center justify-center w-full max-w-[280px] mx-auto">
@@ -655,9 +662,7 @@ export default function BuyerPhoneContent({
               {Math.floor(buyerSearchTimerSeconds / 60)}:{(buyerSearchTimerSeconds % 60).toString().padStart(2, '0')}
             </p>
             <div className="w-full flex flex-col items-center">
-              {buyerDepositDone ? (
-                <p className="text-cyan-400 text-xs font-display text-center">입금 완료</p>
-              ) : (
+              {!buyerDepositDone && (
                 <div className="flex gap-2 w-full">
                   <button
                     type="button"
@@ -680,9 +685,8 @@ export default function BuyerPhoneContent({
           {((showDepositModal && matchResult) || depositModalForMulti) && (depositModalForMulti?.matchResult ?? matchResult) && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 rounded-2xl">
               <div className="w-full max-w-[280px] glass-cyber border-2 border-red-500 rounded-2xl px-5 py-6 flex flex-col gap-6">
-                <p className="text-slate-100 font-bold text-base text-center">입금확인</p>
+                <p className="text-slate-100 font-bold text-base text-center">입금을 완료하였습니까?</p>
                 <div className="rounded-xl bg-slate-700/80 px-4 py-5 text-center space-y-3">
-                  <p className="text-slate-400 text-xs font-display tracking-wider">은행</p>
                   <p className="text-slate-100 font-medium text-sm">{(depositModalForMulti?.matchResult ?? matchResult)!.seller.bank}</p>
                   <p className="font-mono text-slate-300 text-sm tracking-wide">{(depositModalForMulti?.matchResult ?? matchResult)!.seller.account}</p>
                   <p className="text-slate-400 text-sm">예금주 {(depositModalForMulti?.matchResult ?? matchResult)!.seller.holder}</p>
