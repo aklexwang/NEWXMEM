@@ -125,7 +125,7 @@ export default function BuyerPhoneContent({
   matchCanceledModalSubtitle = '3회이상 매칭확인 거부시 이용이 중지됨',
   matchCanceledModalButtonText = '확인',
   multiOrderedMatchesForBuyer,
-  sellerMemberIds = [],
+  sellerMemberIds: _sellerMemberIds = [],
   onConfirmMatchMulti,
   onDeclineMatchMulti,
   setBuyerDepositDoneMulti,
@@ -469,7 +469,7 @@ export default function BuyerPhoneContent({
                       <div className="flex gap-2 mt-1">
                         <button
                           type="button"
-                          onClick={() => { setDepositConfirmChecked(false); clearDepositPhotos(); setDepositModalForMulti({ matchId: item.matchId, matchResult: item.matchResult }); }}
+                          onClick={() => { setDepositConfirmChecked(false); clearDepositPhotos(); if (item.matchResult) setDepositModalForMulti({ matchId: item.matchId, matchResult: item.matchResult }); }}
                           className="btn-deposit flex-1 text-sm h-10 rounded-lg font-display"
                         >
                           입금 확인
@@ -519,7 +519,7 @@ export default function BuyerPhoneContent({
                 </button>
                 {depositPhotoPreviewUrls.length > 0 && (
                   <div className="w-full flex flex-wrap gap-2 justify-center">
-                    {depositPhotoPreviewUrls.slice(0, 4).map((url, i) => (
+                    {depositPhotoPreviewUrls.slice(0, 4).map((url) => (
                       <div key={url} className="relative w-14 h-14 rounded-lg overflow-hidden bg-slate-700 border border-slate-600">
                         <img src={url} alt="" className="w-full h-full object-cover" />
                       </div>
@@ -707,7 +707,7 @@ export default function BuyerPhoneContent({
                     </button>
                     {depositPhotoPreviewUrls.length > 0 && (
                       <div className="w-full flex flex-wrap gap-2 justify-center">
-                        {depositPhotoPreviewUrls.slice(0, 4).map((url, i) => (
+                        {depositPhotoPreviewUrls.slice(0, 4).map((url) => (
                           <div key={url} className="relative w-14 h-14 rounded-lg overflow-hidden bg-slate-700 border border-slate-600">
                             <img src={url} alt="" className="w-full h-full object-cover" />
                           </div>

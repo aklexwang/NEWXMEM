@@ -1528,6 +1528,7 @@ export default function App() {
             matchCanceledModalSubtitle={canceledBuyerHadConfirmed ? '판매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
             matchCanceledModalButtonText={canceledBuyerHadConfirmed ? '재매칭' : '확인'}
             buyerDepositPhotoEnabled={simConfig.buyerDepositPhotoEnabled}
+            onRejectDepositMulti={useMultiSimultaneous ? handleBuyerRejectDepositMulti : undefined}
           />
         </IPhoneFrame>
         {/* 구매자 화면 2~5 (제목 옆에 - 삭제 버튼) */}
@@ -1613,6 +1614,7 @@ export default function App() {
                 matchCanceledModalSubtitle={canceledBuyerHadConfirmed ? '판매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
                 matchCanceledModalButtonText={canceledBuyerHadConfirmed ? '재매칭' : '확인'}
                 buyerDepositPhotoEnabled={simConfig.buyerDepositPhotoEnabled}
+                onRejectDepositMulti={useMultiSimultaneous ? handleBuyerRejectDepositMulti : undefined}
               />
             </IPhoneFrame>
           );
