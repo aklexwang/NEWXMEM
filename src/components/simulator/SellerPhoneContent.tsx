@@ -122,7 +122,7 @@ export default function SellerPhoneContent({
   matchCanceledModalTitle = '매칭 미확인',
   matchCanceledModalSubtitle = '3회이상 매칭확인 거부시 이용이 중지됨',
   multiOrderedMatches,
-  buyerMemberIds = [],
+  buyerMemberIds: _buyerMemberIds = [],
   onConfirmMatchMulti,
   onDeclineMatchMulti,
   onSellerConfirmDepositMulti,
