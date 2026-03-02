@@ -574,7 +574,7 @@ export default function BuyerMultiSellerSimulator({ simConfig, onReset: _onReset
   return (
     <div className="flex flex-col sm:flex-row flex-wrap justify-center items-center gap-4 sm:gap-6 md:gap-8 lg:gap-12 xl:gap-16 w-full max-w-[1800px]">
       {/* 구매자 화면 1 */}
-      <IPhoneFrame variant="buyer" title="구매자 화면 1">
+      <IPhoneFrame variant="buyer" title="구매자 1">
         <BuyerPhoneContent
           buyerIndex={0}
           phase={effectivePhase}
@@ -652,13 +652,13 @@ export default function BuyerMultiSellerSimulator({ simConfig, onReset: _onReset
         return (
           <IPhoneFrame
             key={sellerIndex}
-            title={`판매자 화면 ${sellerIndex + 1}`}
+            title={`판매자 ${sellerIndex + 1}`}
             titleAction={
               sellerIndex === 0 && sellerSlots.length < MAX_SELLERS_B2S ? (
                 <button
                   type="button"
                   onClick={addSellerSlot}
-                  className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-slate-500/60 hover:border-cyan-400/70 hover:bg-slate-700/50 text-slate-400 hover:text-cyan-400 flex items-center justify-center text-base font-light transition-all duration-200"
+                  className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-cyan-400/60 hover:border-cyan-400/80 hover:bg-cyan-400/10 text-cyan-400 flex items-center justify-center text-base font-light transition-all duration-200"
                   aria-label="판매자 화면 추가"
                   title="판매자 추가"
                 >

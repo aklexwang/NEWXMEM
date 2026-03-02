@@ -81,6 +81,8 @@ export interface SellerPhoneContentProps {
   sellerDepositPhotoEnabled?: boolean;
   /** 분쟁 발생 시 true → 분쟁 화면만 표시(어드민 풀어주기 전까지) */
   hasActiveDispute?: boolean;
+  /** 분쟁 사유 (구매자 화면과 동일하게 표시) */
+  activeDisputeReason?: string;
 }
 
 export default function SellerPhoneContent({
@@ -136,6 +138,7 @@ export default function SellerPhoneContent({
   onOpenTransferModal,
   sellerDepositPhotoEnabled = false,
   hasActiveDispute = false,
+  activeDisputeReason,
 }: SellerPhoneContentProps) {
   void onReset, onDeclineMatch;
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -271,10 +274,13 @@ export default function SellerPhoneContent({
           </div>
         </div>
       ) : null}
-      {/* 분쟁 발생 시: 어드민 풀어주기 전까지 분쟁 화면만 표시. 구매자와 동일한 상단 패딩으로 분쟁발생 위치 맞춤 */}
+      {/* 분쟁 발생 시: 어드민 풀어주기 전까지 분쟁 화면만 표시. 구매자와 동일하게 사유 + 안내 문구 */}
       {hasActiveDispute && (
         <div className="flex-1 flex flex-col items-center justify-start min-h-0 pt-24 pb-10 px-4">
           <p className="text-red-400 text-xl font-bold font-display mb-4">분쟁발생</p>
+          {activeDisputeReason && (
+            <p className="text-slate-300 text-sm text-center mb-4 px-2">{activeDisputeReason}</p>
+          )}
           <p className="text-slate-400 text-sm text-center whitespace-pre-line">
             관리자 확인중입니다.
             {'\n'}

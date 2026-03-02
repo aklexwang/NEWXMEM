@@ -28,7 +28,7 @@ export type SimConfig = {
 };
 
 export const DEFAULT_SIM_CONFIG: SimConfig = {
-  matchDelaySeconds: 5,
+  matchDelaySeconds: 3,
   confirmDelaySeconds: 1.5,
   sellerSearchTimerMinutes: 10,
   buyerSearchTimerMinutes: 5,
@@ -866,19 +866,16 @@ export default function App() {
     setTransferModalMatchId(null); // 인라인 확인 후 전역 선택 해제
   }, []);
 
-  /** [다중 동시 매칭] 건별 입금 거부: 분쟁 발생 → 양쪽 분쟁 화면, 위반 기록. 어드민 풀어주기 전까지 유지 */
+  /** [다중 동시 매칭] 건별 입금 거부: 분쟁 발생 → 위반 모달 없이 바로 양쪽 분쟁 화면으로 */
   const handleSellerRejectDepositMulti = useCallback(
     (matchId: string, reason: string) => {
       const m = tradingMatches.find((x) => x.matchId === matchId);
       if (!m) return;
-      const entry: ViolationEntry = { type: '거부', message: `판매자 입금 거부: ${reason}` };
-      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, entry] }));
-      setBuyerSlotAt(m.buyerIndex, (s) => ({ ...s, violationHistory: [...s.violationHistory, entry] }));
       setActiveDisputes((prev) => [...prev, { matchId, buyerIndex: m.buyerIndex, amount: m.amount, reason: `판매자 입금 거부: ${reason}` }]);
       setTradingMatches((prev) => prev.filter((x) => x.matchId !== matchId));
       setMatchDisplayOrder((prev) => prev.filter((id) => id !== matchId));
     },
-    [tradingMatches, setSellerSlotAt, setBuyerSlotAt]
+    [tradingMatches]
   );
 
   /** [다중 동시 매칭] 구매자 입금 불가: 해당 건만 거래에서 제거, 위반 기록(분쟁 아님) */
@@ -1570,13 +1567,13 @@ export default function App() {
         {/* 구매자 화면 1 (제목 "1" 옆에 + 버튼, 주황 테마) */}
         <IPhoneFrame
           variant="buyer"
-          title="구매자 화면 1"
+          title="구매자 1"
           titleAction={
             buyerSlots.length < MAX_BUYERS && sellerSlots.length <= 1 ? (
               <button
                 type="button"
                 onClick={addBuyerSlot}
-                className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-slate-500/60 hover:border-orange-400/70 hover:bg-slate-700/50 text-slate-400 hover:text-orange-400 flex items-center justify-center text-base font-light transition-all duration-200"
+                className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-orange-400/60 hover:border-orange-400/80 hover:bg-orange-400/10 text-orange-400 flex items-center justify-center text-base font-light transition-all duration-200"
                 aria-label="구매자 화면 추가"
                 title="구매자 추가"
               >
@@ -1659,11 +1656,11 @@ export default function App() {
             <IPhoneFrame
               variant="buyer"
               key={buyerIndex}
-              title={`구매자 화면 ${buyerIndex + 1}`}
-              titleAction={
-                <button
-                  type="button"
-                  onClick={() => removeBuyerSlot(buyerIndex)}
+title={`구매자 ${buyerIndex + 1}`}
+                titleAction={
+                  <button
+                    type="button"
+                    onClick={() => removeBuyerSlot(buyerIndex)}
                   className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-slate-500/60 hover:border-red-400/70 hover:bg-slate-700/50 text-slate-400 hover:text-red-400 flex items-center justify-center text-base font-light transition-all duration-200"
                   aria-label="구매자 화면 삭제"
                   title="구매자 삭제"
@@ -1751,13 +1748,13 @@ export default function App() {
             !confirmingInvalidated;
           return (
         <IPhoneFrame
-          title="판매자 화면 1"
+          title="판매자 1"
           titleAction={
             sellerSlots.length < MAX_SELLERS && buyerSlots.length <= 1 ? (
               <button
                 type="button"
                 onClick={addSellerSlot}
-                className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-slate-500/60 hover:border-cyan-400/70 hover:bg-slate-700/50 text-slate-400 hover:text-cyan-400 flex items-center justify-center text-base font-light transition-all duration-200"
+                className="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-cyan-400/60 hover:border-cyan-400/80 hover:bg-cyan-400/10 text-cyan-400 flex items-center justify-center text-base font-light transition-all duration-200"
                 aria-label="판매자 화면 추가"
                 title="판매자 추가"
               >
@@ -1839,6 +1836,7 @@ export default function App() {
             onOpenTransferModal={useMultiSimultaneous ? setTransferModalMatchId : undefined}
             sellerDepositPhotoEnabled={simConfig.sellerDepositPhotoEnabled}
             hasActiveDispute={useMultiSimultaneous && activeDisputes.length > 0}
+            activeDisputeReason={activeDisputes.length > 0 ? activeDisputes[0].reason : undefined}
           />
         </IPhoneFrame>
           );
@@ -1849,7 +1847,7 @@ export default function App() {
           return (
             <IPhoneFrame
               key={sellerIndex}
-              title={`판매자 화면 ${sellerIndex + 1}`}
+              title={`판매자 ${sellerIndex + 1}`}
               titleAction={
                 <button
                   type="button"
