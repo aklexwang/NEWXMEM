@@ -52,6 +52,8 @@ export interface BuyerPhoneContentProps {
   matchCanceledModalTitle?: string;
   matchCanceledModalSubtitle?: string;
   matchCanceledModalButtonText?: string;
+  /** 판매자 거절 시 구매자 화면에 2초간 표시할 메시지 (예: 판매자가 매칭을 취소하였습니다.) */
+  buyerCancelMessage?: string | null;
   /** B2S: 구매자 1명·다중 판매자 시 거래완료 + 확인/거래 카드 목록 (있으면 다중 카드 UI 표시) */
   multiOrderedMatchesForBuyer?: Array<
     | { kind: 'completed'; matchId: string; sellerIndex: number; amount: number }
@@ -71,7 +73,7 @@ export interface BuyerPhoneContentProps {
   sellerMemberIds?: string[];
   onConfirmMatchMulti?: (matchId: string) => void;
   /** 다중 매칭 시 건별 거부(매칭 취소). reason 선택 시 두 번째 인자로 전달 */
-  onDeclineMatchMulti?: (matchId: string, reason?: string) => void;
+  onDeclineMatchMulti?: (matchId: string, reason?: string, declinedBy?: 'buyer' | 'seller') => void;
   setBuyerDepositDoneMulti?: (matchId: string) => void;
   /** 다중 매칭 시 건별 입금 불가(사유 선택 후 해당 건만 제거, 위반 기록) */
   onRejectDepositMulti?: (matchId: string, reason: string) => void;
@@ -124,6 +126,7 @@ export default function BuyerPhoneContent({
   matchCanceledModalTitle = '매칭 미확인',
   matchCanceledModalSubtitle = '3회이상 매칭확인 거부시 이용이 중지됨',
   matchCanceledModalButtonText = '확인',
+  buyerCancelMessage = null,
   multiOrderedMatchesForBuyer,
   sellerMemberIds: _sellerMemberIds = [],
   onConfirmMatchMulti,
@@ -626,7 +629,7 @@ export default function BuyerPhoneContent({
                 onClick={() => {
                   if (selectedDeclineReason) {
                     if (declineReasonMatchId && onDeclineMatchMulti) {
-                      onDeclineMatchMulti(declineReasonMatchId, selectedDeclineReason);
+                      onDeclineMatchMulti(declineReasonMatchId, selectedDeclineReason, 'buyer');
                     } else {
                       onDeclineMatch(selectedDeclineReason);
                     }
@@ -642,6 +645,13 @@ export default function BuyerPhoneContent({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {buyerCancelMessage && (
+        <div className="absolute inset-0 z-[55] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 rounded-2xl">
+          <p className="text-amber-400/95 text-center font-display text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">
+            {buyerCancelMessage}
+          </p>
         </div>
       )}
       {!dispute && phase === 'trading' && matchResult && !useMultiCards && (

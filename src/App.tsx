@@ -28,7 +28,7 @@ export type SimConfig = {
 };
 
 export const DEFAULT_SIM_CONFIG: SimConfig = {
-  matchDelaySeconds: 2,
+  matchDelaySeconds: 5,
   confirmDelaySeconds: 1.5,
   sellerSearchTimerMinutes: 10,
   buyerSearchTimerMinutes: 5,
@@ -207,6 +207,12 @@ export default function App() {
   /** 취소 시점에 구매자/판매자가 이미 확인했는지 → 모달 문구 구분용 */
   const [canceledBuyerHadConfirmed, setCanceledBuyerHadConfirmed] = useState(false);
   const [canceledSellerHadConfirmed, setCanceledSellerHadConfirmed] = useState(false);
+  /** 구매자 거절 시 판매자 화면에 2초간 표시. true면 2초 후 판매자 첫화면(단일 매칭), false면 메시지만 제거(다중) */
+  const [sellerCancelMessage, setSellerCancelMessage] = useState<string | null>(null);
+  const sellerCancelMessageRequiresResetRef = useRef(false);
+  /** 판매자 거절 시 구매자 화면에 2초간 표시 후 첫화면 (다중 모드에서는 해당 buyerIndex만 표시) */
+  const [buyerCancelMessage, setBuyerCancelMessage] = useState<string | null>(null);
+  const [buyerCancelMessageForIndex, setBuyerCancelMessageForIndex] = useState<number | null>(null);
   /** 구매자 거절/취소 시 true → 판매자 확인 화면 즉시 숨김 (상태 배치 전에도 적용) */
   const [confirmingInvalidated, setConfirmingInvalidated] = useState(false);
   const confirmingMatchedBuyerIndexRef = useRef<number | null>(null);
@@ -220,13 +226,6 @@ export default function App() {
     Math.min(sellerRemainingAmount, matchedSlot.amount) > 0 &&
     isValidAmount(sellerRemainingAmount) &&
     isValidAmount(matchedSlot.amount);
-
-  /** 다중 동시 매칭: 예약된 금액(대기+확인+거래중) 제외한 잔액 */
-  const reservedAmount =
-    scheduledMatches.reduce((s, m) => s + m.amount, 0) +
-    confirmingMatches.reduce((s, m) => s + m.amount, 0) +
-    tradingMatches.reduce((s, m) => s + m.amount, 0);
-  const availableToMatch = Math.max(0, sellerRemainingAmount - reservedAmount);
 
   /** 매칭 미확인 모달이 떠 있는 동안(한쪽이라도 확인 전): 모든 동작 중지 */
   const matchCanceledModalOpen =
@@ -319,16 +318,24 @@ export default function App() {
   }, [sellerSlots.length, sellerStarted, sellerRemainingAmount, sellerAmount]);
 
   // [다중 동시 매칭] 판매자 검색 중·10분 내, 먼저 들어온 순(구매자 인덱스 순)으로 금액 배분해 scheduled에 추가
+  // 취소한 구매자( started=false )는 scheduled에서 제거한 뒤 잔액 기준으로 다른 구매자 추가
   useEffect(() => {
-    if (!sellerStarted || sellerSearchTimerSeconds <= 0 || availableToMatch < MIN_POINT_AMOUNT) return;
+    if (!sellerStarted || sellerSearchTimerSeconds <= 0) return;
     setScheduledMatches((prev) => {
-      let available = sellerRemainingAmount - reservedAmount;
-      const next = [...prev];
+      const valid = prev.filter(
+        (m) => buyerSlots[m.buyerIndex]?.started === true && isValidAmount(buyerSlots[m.buyerIndex]?.amount ?? 0)
+      );
+      const reserved =
+        valid.reduce((s, m) => s + m.amount, 0) +
+        confirmingMatches.reduce((s, m) => s + m.amount, 0) +
+        tradingMatches.reduce((s, m) => s + m.amount, 0);
+      let available = Math.max(0, sellerRemainingAmount - reserved);
+      const next = [...valid];
       for (let i = 0; i < buyerSlots.length; i++) {
         if (available < MIN_POINT_AMOUNT) break;
         const slot = buyerSlots[i];
         const alreadyIn =
-          prev.some((m) => m.buyerIndex === i) ||
+          next.some((m) => m.buyerIndex === i) ||
           confirmingMatches.some((m) => m.buyerIndex === i) ||
           tradingMatches.some((m) => m.buyerIndex === i);
         if (
@@ -342,14 +349,13 @@ export default function App() {
         next.push({ matchId: generateMatchId(), buyerIndex: i, amount, scheduledAt: Date.now() });
         available -= amount;
       }
-      return next.length === prev.length ? prev : next;
+      if (next.length === prev.length && prev.every((m, i) => next[i]?.matchId === m.matchId)) return prev;
+      return next;
     });
   }, [
     sellerStarted,
     sellerSearchTimerSeconds,
     sellerRemainingAmount,
-    reservedAmount,
-    availableToMatch,
     buyerSlots,
     confirmingMatches,
     tradingMatches,
@@ -367,9 +373,12 @@ export default function App() {
   useEffect(() => {
     if (scheduledMatches.length === 0) return;
     const now = Date.now();
-    const ready = scheduledMatches.filter((m) => now - m.scheduledAt >= simConfig.matchDelaySeconds * 1000);
+    const delayMs = simConfig.matchDelaySeconds * 1000;
+    const ready = scheduledMatches.filter(
+      (m) => now - m.scheduledAt >= delayMs && buyerSlots[m.buyerIndex]?.started === true
+    );
     if (ready.length === 0) return;
-    setScheduledMatches((prev) => prev.filter((m) => now - m.scheduledAt < simConfig.matchDelaySeconds * 1000));
+    setScheduledMatches((prev) => prev.filter((m) => now - m.scheduledAt < delayMs));
     setConfirmingMatches((prev) => [
       ...prev,
       ...ready.map((m) => ({
@@ -383,7 +392,7 @@ export default function App() {
     ]);
     setMatchDisplayOrder((prev) => [...prev, ...ready.map((m) => m.matchId)]);
     if (ready.length > 0) playMatchSoundLoop();
-  }, [scheduledMatches, scheduledCheckTick, simConfig.matchDelaySeconds, simConfig.confirmTimerSeconds]);
+  }, [scheduledMatches, scheduledCheckTick, simConfig.matchDelaySeconds, simConfig.confirmTimerSeconds, buyerSlots]);
 
   const timedOutConfirmingRef = useRef<ConfirmingMatch[]>([]);
   // [다중 동시 매칭] confirming 타이머 1초마다 감소, 0 되면 해당 건만 제거
@@ -399,27 +408,14 @@ export default function App() {
     }, 1000);
     return () => clearInterval(id);
   }, [confirmingMatches.length]);
-  // 시간 초과된 confirming 건에 대해 위반 기록 및 구매자 초기화
+  // [다중 동시 매칭] 시간 초과된 confirming 건: 해당 건만 confirming·표시 순서에서 제거, 위반 내역 표기 안 함 (1번 취소 규칙)
   useEffect(() => {
     const timedOut = timedOutConfirmingRef.current;
     if (timedOut.length === 0) return;
     timedOutConfirmingRef.current = [];
     const ids = new Set(timedOut.map((m) => m.matchId));
     setMatchDisplayOrder((prev) => prev.filter((id) => !ids.has(id)));
-    const violationEntry: ViolationEntry = { type: '취소', message: '매칭 확인 시간 초과 또는 취소' };
-    timedOut.forEach((m) => {
-      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
-      setBuyerSlotAt(m.buyerIndex, (s) => ({
-        ...s,
-        started: false,
-        amount: 0,
-        depositDone: false,
-        matchConfirmed: false,
-        violationHistory: [...s.violationHistory, violationEntry],
-        searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
-      }));
-    });
-  }, [confirmingMatches, setSellerSlotAt, setBuyerSlotAt, simConfig.buyerSearchTimerMinutes]);
+  }, [confirmingMatches]);
 
   // [다중 동시 매칭] 양쪽 모두 확인한 건 → trading으로 이동 (입금 제한 타이머 시작)
   useEffect(() => {
@@ -579,39 +575,68 @@ export default function App() {
     setMatchedBuyerIndex(candidates[0].index);
   }, [useMultiSimultaneous, phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, buyerSlots, matchCanceledModalOpen]);
 
-  // 2) [단일 매칭] SEARCHING 2초 뒤 매칭 성사 → confirming (다중 동시 매칭 시 스킵). 구매자 취소 시 이 타이머를 즉시 해제하기 위해 ref에 보관.
-  const matchDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 2) [단일 매칭] SEARCHING N초 뒤 매칭 성사 → confirming. 취소 시 세대 무효화로 해당 대기만 무효.
+  const matchDelayStartedAtRef = useRef<number | null>(null);
+  /** 매칭 대기 세대: 대기 시작 시 증가, 취소 시 -1. 전환 시 세대 일치·유효할 때만 confirming */
+  const matchDelayGenerationRef = useRef(0);
   const matchSearchRef = useRef({
+    phase: 'idle' as SimPhase,
     sellerRemainingAmount: 0,
     matchedBuyerIndex: null as number | null,
     buyerSlots: [] as BuyerSlot[],
   });
-  matchSearchRef.current = { sellerRemainingAmount, matchedBuyerIndex, buyerSlots };
+  matchSearchRef.current = { phase, sellerRemainingAmount, matchedBuyerIndex, buyerSlots };
   useEffect(() => {
-    if (useMultiSimultaneous || phase !== 'searching' || matchedBuyerIndex === null) return;
-    const slot = buyerSlots[matchedBuyerIndex];
-    const matchAmount = Math.min(sellerRemainingAmount, slot?.amount ?? 0);
-    if (!sellerStarted || !slot?.started || matchAmount <= 0) return;
-    const timer = setTimeout(() => {
-      const { sellerRemainingAmount: rem, matchedBuyerIndex: idx, buyerSlots: slots } = matchSearchRef.current;
-      if (idx === null) return;
+    if (useMultiSimultaneous) {
+      console.log('[matchDelay] 다중 매칭 모드라 폴링 비활성');
+      return;
+    }
+    const delayMs = simConfig.matchDelaySeconds * 1000;
+    console.log('[matchDelay] 폴링 시작 (5초 대기=', delayMs, 'ms)');
+    const interval = setInterval(() => {
+      const { phase: p, matchedBuyerIndex: idx, buyerSlots: slots } = matchSearchRef.current;
+      if (p !== 'searching' || idx === null) {
+        matchDelayStartedAtRef.current = null;
+        return;
+      }
       const s = slots[idx];
-      if (!s?.started) return;
-      const result = computeMatchResult(rem, s.amount, sellerSessionUser, s.user);
+      if (!s?.started) {
+        matchDelayStartedAtRef.current = null;
+        return;
+      }
+      const startedAt = matchDelayStartedAtRef.current;
+      if (startedAt === null) {
+        matchDelayGenerationRef.current = Math.max(0, matchDelayGenerationRef.current) + 1;
+        matchDelayStartedAtRef.current = Date.now();
+        console.log('[matchDelay] 5초 대기 시작 gen=', matchDelayGenerationRef.current);
+        return;
+      }
+      if (Date.now() - startedAt < delayMs) return;
+      const gen = matchDelayGenerationRef.current;
+      if (gen <= 0) {
+        matchDelayStartedAtRef.current = null;
+        console.log('[matchDelay] 전환 스킵: 세대 무효 gen=', gen);
+        return;
+      }
+      const latest = matchSearchRef.current;
+      if (latest.matchedBuyerIndex === null || !latest.buyerSlots[latest.matchedBuyerIndex]?.started) {
+        matchDelayStartedAtRef.current = null;
+        console.log('[matchDelay] 전환 스킵: ref에서 취소됨 idx=', latest.matchedBuyerIndex, 'started=', latest.matchedBuyerIndex != null ? latest.buyerSlots[latest.matchedBuyerIndex]?.started : '-');
+        return;
+      }
+      console.log('[matchDelay] → confirming 전환 gen=', gen, 'idx=', latest.matchedBuyerIndex);
+      matchDelayStartedAtRef.current = null;
+      const result = computeMatchResult(latest.sellerRemainingAmount, latest.buyerSlots[latest.matchedBuyerIndex].amount, sellerSessionUser, latest.buyerSlots[latest.matchedBuyerIndex].user);
       setConfirmingInvalidated(false);
       setMatchResult(result);
       setPhase('confirming');
       playMatchSoundLoop();
       setSellerMatchConfirmed(false);
-      setBuyerSlotAt(idx, (prev) => ({ ...prev, depositDone: false, matchConfirmed: false }));
+      setBuyerSlotAt(latest.matchedBuyerIndex, (prev) => ({ ...prev, depositDone: false, matchConfirmed: false }));
       setSellerConfirmed(false);
-    }, simConfig.matchDelaySeconds * 1000);
-    matchDelayTimerRef.current = timer;
-    return () => {
-      clearTimeout(timer);
-      matchDelayTimerRef.current = null;
-    };
-  }, [useMultiSimultaneous, phase, matchedBuyerIndex, sellerStarted, sellerRemainingAmount, setBuyerSlotAt, simConfig.matchDelaySeconds]);
+    }, 200);
+    return () => clearInterval(interval);
+  }, [useMultiSimultaneous, setBuyerSlotAt, simConfig.matchDelaySeconds]);
 
   // 3) [단일 매칭] 양쪽 모두 매칭 확인 시 거래(trading) 단계 (입금 제한 타이머 시작)
   useEffect(() => {
@@ -735,6 +760,39 @@ export default function App() {
     setSellerMatchConfirmed(true);
   }, []);
 
+  /** 매칭 확인 단계: 판매자 거절 시 구매자 화면에 "판매자가 매칭을 취소하였습니다." 2초 표시 후 둘 다 첫화면 */
+  const handleSellerDeclineMatch = useCallback(() => {
+    const idx = confirmingMatchedBuyerIndexRef.current ?? matchedBuyerIndex;
+    if (idx === null) return;
+    flushSync(() => setConfirmingInvalidated(true));
+    setBuyerCancelMessage('판매자가 매칭을 취소하였습니다.');
+    setBuyerSlots((prev) =>
+      prev.map((s, i) =>
+        i === idx
+          ? {
+              ...s,
+              started: false,
+              amount: 0,
+              depositDone: false,
+              matchConfirmed: false,
+              showCompletedScreen: false,
+              lastCompletedAmount: 0,
+              searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+            }
+          : s
+      )
+    );
+    setMatchResult(null);
+    setSellerMatchConfirmed(false);
+    setMatchedBuyerIndex(null);
+    setPhase('idle');
+    setSellerStarted(false);
+    setSellerAmount(0);
+    setSellerRemainingAmount(0);
+    setConfirmingInvalidated(true);
+    confirmingMatchedBuyerIndexRef.current = null;
+  }, [matchedBuyerIndex, simConfig.buyerSearchTimerMinutes]);
+
   /** 매칭 확인: 구매자 확인 (단일, 해당 슬롯) */
   const handleBuyerConfirmMatch = useCallback(
     (buyerIndex: number) => {
@@ -754,19 +812,53 @@ export default function App() {
     stopMatchSound();
     setConfirmingMatches((prev) => prev.map((m) => (m.matchId === matchId ? { ...m, buyerConfirmed: true } : m)));
   }, []);
-  /** [다중 동시 매칭] 건별 취소/거절: 구매자 거절은 분쟁 아님 → 위반만 기록, 해당 건만 제거. (판매자 입금 거부만 분쟁) */
+  /** [다중 동시 매칭] 건별 취소/거절.
+   * 구매자 거절: 구매자 즉시 첫화면, 판매자에 "구매자가 매칭을 취소하였습니다." 2초 후 첫화면(다른 매칭 없을 때만).
+   * 판매자 거절: 해당 구매자 즉시 첫화면 + 2초 메시지. */
   const handleDeclineMatchMulti = useCallback(
-    (matchId: string, reason?: string) => {
+    (matchId: string, _reason?: string, declinedBy?: 'buyer' | 'seller') => {
       const m = confirmingMatches.find((x) => x.matchId === matchId);
       if (!m) return;
-      const message = reason ? `구매자 거부: ${reason}` : '매칭 확인 시간 초과 또는 취소';
-      const violationEntry: ViolationEntry = { type: reason ? '거부' : '취소', message };
-      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
-      setBuyerSlotAt(m.buyerIndex, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
+      if (declinedBy === 'seller') {
+        setBuyerCancelMessage('판매자가 매칭을 취소하였습니다.');
+        setBuyerCancelMessageForIndex(m.buyerIndex);
+        setBuyerSlotAt(m.buyerIndex, (s) => ({
+          ...s,
+          started: false,
+          amount: 0,
+          depositDone: false,
+          matchConfirmed: false,
+          showCompletedScreen: false,
+          lastCompletedAmount: 0,
+          searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+        }));
+        setPhase('idle');
+        setSellerStarted(false);
+        setSellerAmount(0);
+        setSellerRemainingAmount(0);
+        setMatchResult(null);
+        setSellerMatchConfirmed(false);
+        setMatchedBuyerIndex(null);
+        setConfirmingInvalidated(true);
+      } else {
+        setSellerCancelMessage('구매자가 매칭을 취소하였습니다.');
+        const otherMatches = confirmingMatches.length + tradingMatches.length;
+        sellerCancelMessageRequiresResetRef.current = otherMatches <= 1;
+        setBuyerSlotAt(m.buyerIndex, (s) => ({
+          ...s,
+          started: false,
+          amount: 0,
+          depositDone: false,
+          matchConfirmed: false,
+          showCompletedScreen: false,
+          lastCompletedAmount: 0,
+          searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
+        }));
+      }
       setConfirmingMatches((prev) => prev.filter((x) => x.matchId !== matchId));
       setMatchDisplayOrder((prev) => prev.filter((id) => id !== matchId));
     },
-    [confirmingMatches, setSellerSlotAt, setBuyerSlotAt]
+    [confirmingMatches, tradingMatches, setSellerSlotAt, setBuyerSlotAt, simConfig.buyerSearchTimerMinutes]
   );
   /** [다중 동시 매칭] 건별 입금확인 */
   const handleSellerConfirmDepositMulti = useCallback((matchId: string) => {
@@ -864,26 +956,17 @@ export default function App() {
     }
   }, [phase, matchedBuyerIndex]);
 
-  /** 매칭 확인 단계: 구매자 거절(사유 선택) 또는 시간 초과 시 해당 매칭만 취소. 구매자는 초기화면, 판매자는 검색 중 화면(10분 타이머)으로. */
+  /** 매칭 확인 단계: 구매자 거절(사유 선택) 또는 시간 초과 시 해당 매칭만 취소.
+   * 취소/거절 시: 구매자 첫 화면, 판매자 화면에는 "구매자가 매칭을 취소하였습니다." 2초 표시 후 첫화면. */
   const handleDeclineMatch = useCallback(
-    (reason?: string) => {
+    (_reason?: string) => {
       flushSync(() => setConfirmingInvalidated(true));
       const idx = confirmingMatchedBuyerIndexRef.current ?? matchedBuyerIndex;
-      const buyerHadConfirmed = idx !== null ? (buyerSlots[idx]?.matchConfirmed ?? false) : false;
-      const sellerHadConfirmed = sellerMatchConfirmed;
-      const violationEntry: ViolationEntry = {
-        type: reason ? '거부' : '취소',
-        message: reason ? `구매자 거부: ${reason}` : '매칭 확인 시간 초과 또는 취소',
-      };
-      if (reason) setRejectReason(reason);
-      setSellerSlotAt(0, (s) => ({ ...s, violationHistory: [...s.violationHistory, violationEntry] }));
       setMatchResult(null);
       setSellerMatchConfirmed(false);
       setMatchedBuyerIndex(null);
       setPhase('searching');
       if (idx !== null) {
-        setCanceledBuyerHadConfirmed(buyerHadConfirmed);
-        setCanceledSellerHadConfirmed(sellerHadConfirmed);
         setBuyerSlots((prev) =>
           prev.map((s, i) =>
             i === idx
@@ -896,18 +979,16 @@ export default function App() {
                   showCompletedScreen: false,
                   lastCompletedAmount: 0,
                   searchTimerSeconds: simConfig.buyerSearchTimerMinutes * 60,
-                  violationHistory: [...s.violationHistory, violationEntry],
                 }
               : s
           )
         );
-        setCanceledMatchedBuyerIndex(idx);
-        setSellerMatchCanceledDismissed(false);
-        setBuyerMatchCanceledDismissed(false);
+        sellerCancelMessageRequiresResetRef.current = true;
+        setSellerCancelMessage('구매자가 매칭을 취소하였습니다.');
       }
       confirmingMatchedBuyerIndexRef.current = null;
     },
-    [matchedBuyerIndex, sellerMatchConfirmed, buyerSlots, simConfig.buyerSearchTimerMinutes, setSellerSlotAt]
+    [matchedBuyerIndex, buyerSlots, simConfig.buyerSearchTimerMinutes]
   );
 
   /** 위반내역 확인 모달에서 확인 클릭 시 → 취소 모달 닫고, 클릭한 쪽(구매자/판매자) 초기 화면으로 */
@@ -973,6 +1054,37 @@ export default function App() {
     },
     [sellerMatchCanceledDismissed, buyerMatchCanceledDismissed]
   );
+
+  // 구매자 거절 시 판매자 화면에 표시된 메시지 2초 후 제거. 단일 매칭이었으면 판매자 첫화면으로
+  useEffect(() => {
+    if (!sellerCancelMessage) return;
+    const requiresReset = sellerCancelMessageRequiresResetRef.current;
+    const t = setTimeout(() => {
+      setSellerCancelMessage(null);
+      sellerCancelMessageRequiresResetRef.current = false;
+      if (requiresReset) {
+        setPhase('idle');
+        setSellerStarted(false);
+        setSellerAmount(0);
+        setSellerRemainingAmount(0);
+        setMatchResult(null);
+        setSellerMatchConfirmed(false);
+        setMatchedBuyerIndex(null);
+        setConfirmingInvalidated(true);
+      }
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [sellerCancelMessage]);
+
+  // 판매자 거절 시 구매자 화면에 표시된 메시지 2초 후 제거 (구매자 첫화면은 handleSellerDeclineMatch / handleDeclineMatchMulti에서 이미 처리)
+  useEffect(() => {
+    if (!buyerCancelMessage) return;
+    const t = setTimeout(() => {
+      setBuyerCancelMessage(null);
+      setBuyerCancelMessageForIndex(null);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [buyerCancelMessage]);
 
   useEffect(() => {
     if (phase !== 'confirming') return;
@@ -1096,19 +1208,26 @@ export default function App() {
     setMatchedBuyerIndex(null);
   }, []);
 
-  /** 구매자 매칭 검색 취소: 취소한 구매자만 초기 화면으로. 예약된 매칭 타이머 즉시 해제해 판매자가 취소한 구매자와 다시 매칭되지 않도록 함 */
+  /** 구매자 매칭 검색 취소: 취소한 구매자만 초기 화면으로. 세대 무효화로 해당 대기 confirming 진입 차단 */
   const handleCancelBuyerSearch = useCallback(
     (buyerIndex: number) => {
-      if (matchDelayTimerRef.current !== null) {
-        clearTimeout(matchDelayTimerRef.current);
-        matchDelayTimerRef.current = null;
-      }
-      flushSync(() => setConfirmingInvalidated(true));
-      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: false, amount: 0 }));
-      if (matchedBuyerIndex === buyerIndex) {
+      const wasMatched = matchedBuyerIndex === buyerIndex;
+      if (wasMatched) {
+        console.log('[matchDelay] 구매자 취소: 세대 무효화 buyerIndex=', buyerIndex);
+        matchDelayGenerationRef.current = -1;
+        matchDelayStartedAtRef.current = null;
+        matchSearchRef.current = {
+          ...matchSearchRef.current,
+          matchedBuyerIndex: null,
+          buyerSlots: matchSearchRef.current.buyerSlots.map((s, i) =>
+            i === buyerIndex ? { ...s, started: false, amount: 0 } : s
+          ),
+        };
         setMatchResult(null);
         setMatchedBuyerIndex(null);
       }
+      setConfirmingInvalidated(true);
+      setBuyerSlotAt(buyerIndex, (s) => ({ ...s, started: false, amount: 0 }));
     },
     [matchedBuyerIndex, setBuyerSlotAt]
   );
@@ -1267,7 +1386,7 @@ export default function App() {
           buyerMatchConfirmed: mc.buyerConfirmed,
           confirmTimerSeconds: mc.confirmTimerSeconds,
           onConfirmMatch: () => handleBuyerConfirmMatchMulti(mc.matchId),
-          onDeclineMatch: () => handleDeclineMatchMulti(mc.matchId),
+          onDeclineMatch: (reason?: string) => handleDeclineMatchMulti(mc.matchId, reason, 'buyer'),
         };
       if (mt)
         return {
@@ -1528,6 +1647,7 @@ export default function App() {
             matchCanceledModalTitle={canceledBuyerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
             matchCanceledModalSubtitle={canceledBuyerHadConfirmed ? '판매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
             matchCanceledModalButtonText={canceledBuyerHadConfirmed ? '재매칭' : '확인'}
+            buyerCancelMessage={buyerCancelMessage && (!useMultiSimultaneous || buyerCancelMessageForIndex === 0) ? buyerCancelMessage : null}
             buyerDepositPhotoEnabled={simConfig.buyerDepositPhotoEnabled}
             onRejectDepositMulti={useMultiSimultaneous ? handleBuyerRejectDepositMulti : undefined}
           />
@@ -1614,6 +1734,7 @@ export default function App() {
                 matchCanceledModalTitle={canceledBuyerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
                 matchCanceledModalSubtitle={canceledBuyerHadConfirmed ? '판매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
                 matchCanceledModalButtonText={canceledBuyerHadConfirmed ? '재매칭' : '확인'}
+                buyerCancelMessage={buyerCancelMessage && buyerCancelMessageForIndex === buyerIndex ? buyerCancelMessage : null}
                 buyerDepositPhotoEnabled={simConfig.buyerDepositPhotoEnabled}
                 onRejectDepositMulti={useMultiSimultaneous ? handleBuyerRejectDepositMulti : undefined}
               />
@@ -1687,6 +1808,8 @@ export default function App() {
             onConfirmMatchCanceledModal={() => handleMatchCanceledConfirm('seller')}
             matchCanceledModalTitle={canceledSellerHadConfirmed ? '매칭 취소' : '매칭 미확인'}
             matchCanceledModalSubtitle={canceledSellerHadConfirmed ? '구매자 미확인으로 매칭이 취소되었습니다.' : '3회이상 매칭확인 거부시 이용이 중지됨'}
+            sellerCancelMessage={sellerCancelMessage}
+            onSellerDeclineMatch={!useMultiSimultaneous ? handleSellerDeclineMatch : undefined}
             multiOrderedMatches={
               useMultiSimultaneous
                 ? (matchDisplayOrder

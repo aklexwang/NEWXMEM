@@ -51,6 +51,10 @@ export interface SellerPhoneContentProps {
   onConfirmMatchCanceledModal?: () => void;
   matchCanceledModalTitle?: string;
   matchCanceledModalSubtitle?: string;
+  /** 구매자 거절 시 판매자 화면에 2초간 표시할 메시지 (예: 구매자가 매칭을 취소하였습니다.) */
+  sellerCancelMessage?: string | null;
+  /** 단일 매칭 확인 단계에서 판매자가 거절 클릭 시 */
+  onSellerDeclineMatch?: () => void;
   /** 다중 동시 매칭: 거래완료 + 확인 대기 + 거래 중을 표시 순서대로 합친 목록 */
   multiOrderedMatches?: Array<
     | { kind: 'completed'; matchId: string; buyerIndex: number; amount: number }
@@ -68,7 +72,7 @@ export interface SellerPhoneContentProps {
   >;
   buyerMemberIds?: string[];
   onConfirmMatchMulti?: (matchId: string) => void;
-  onDeclineMatchMulti?: (matchId: string) => void;
+  onDeclineMatchMulti?: (matchId: string, reason?: string, declinedBy?: 'buyer' | 'seller') => void;
   onSellerConfirmDepositMulti?: (matchId: string) => void;
   /** 다중 매칭 시 입금확인 모달용 matchResult (현재 선택된 건) */
   multiTransferMatchResult?: MatchResult | null;
@@ -121,6 +125,8 @@ export default function SellerPhoneContent({
   onConfirmMatchCanceledModal,
   matchCanceledModalTitle = '매칭 미확인',
   matchCanceledModalSubtitle = '3회이상 매칭확인 거부시 이용이 중지됨',
+  sellerCancelMessage = null,
+  onSellerDeclineMatch,
   multiOrderedMatches,
   buyerMemberIds: _buyerMemberIds = [],
   onConfirmMatchMulti,
@@ -167,6 +173,10 @@ export default function SellerPhoneContent({
   const [sellerRejectReason, setSellerRejectReason] = useState<string | null>(null);
   /** 다중 매칭에서 거부 버튼으로 연 모달일 때, 거부 대상 matchId */
   const [rejectingMatchId, setRejectingMatchId] = useState<string | null>(null);
+  /** 매칭 확인 단계에서 판매자가 거절 클릭 시 사유 선택 모달 */
+  const [showSellerConfirmingDeclineModal, setShowSellerConfirmingDeclineModal] = useState(false);
+  const [sellerConfirmingDeclineMatchId, setSellerConfirmingDeclineMatchId] = useState<string | null>(null);
+  const [sellerConfirmingDeclineReason, setSellerConfirmingDeclineReason] = useState<string | null>(null);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [lastSeenViolationCount, setLastSeenViolationCount] = useState(0);
   const hasNewViolations = violationHistory.length > lastSeenViolationCount;
@@ -177,6 +187,7 @@ export default function SellerPhoneContent({
   }, [hasNewViolations, violationHistory.length]);
 
   const sellerRejectReasonOptions = ['입금금액 불일치', '미입금', '입금정보 불일치'];
+  const sellerConfirmingDeclineOptions = ['구매 의사 없음', '금액 변경 희망', '기타'];
 
   const handleSellerDepositPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -440,7 +451,15 @@ export default function SellerPhoneContent({
                       </button>
                     )}
                     {onDeclineMatchMulti && (
-                      <button type="button" onClick={() => onDeclineMatchMulti(item.matchId)} className="flex-1 h-9 min-h-[2.25rem] rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSellerConfirmingDeclineMatchId(item.matchId);
+                          setSellerConfirmingDeclineReason(null);
+                          setShowSellerConfirmingDeclineModal(true);
+                        }}
+                        className="flex-1 h-9 min-h-[2.25rem] rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 flex items-center justify-center"
+                      >
                         거절
                       </button>
                     )}
@@ -569,7 +588,7 @@ export default function SellerPhoneContent({
                       onClick={() => { setRejectingMatchId(item.matchId); setShowSellerRejectModal(true); }}
                       className="flex-1 min-h-[44px] rounded-lg text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 cursor-pointer touch-manipulation"
                     >
-                      거부
+                      취소 요청
                     </button>
                   </div>
                 )}
@@ -614,12 +633,24 @@ export default function SellerPhoneContent({
           </section>
           <div className="flex-grow min-h-0" aria-hidden />
           {!sellerMatchConfirmed && (
-            <div className="flex-shrink-0 mt-auto mb-5">
-              <button type="button" onClick={onConfirmMatch} className="btn-success w-full text-sm h-12 rounded-xl font-display">
+            <div className="flex-shrink-0 mt-auto mb-5 flex gap-2">
+              <button type="button" onClick={onConfirmMatch} className="btn-success flex-1 text-sm h-12 rounded-xl font-display">
                 승인
               </button>
+              {onSellerDeclineMatch && (
+                <button type="button" onClick={onSellerDeclineMatch} className="flex-1 h-12 rounded-xl text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 transition-colors">
+                  거절
+                </button>
+              )}
             </div>
           )}
+        </div>
+      )}
+      {sellerCancelMessage && (
+        <div className="absolute inset-0 z-[55] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 rounded-2xl">
+          <p className="text-amber-400/95 text-center font-display text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]">
+            {sellerCancelMessage}
+          </p>
         </div>
       )}
       {!hasActiveDispute && phase === 'trading' && matchResult && !(multiOrderedMatches?.some((m) => m.kind === 'trading')) && (
@@ -663,7 +694,7 @@ export default function SellerPhoneContent({
                     onClick={() => setShowSellerRejectModal(true)}
                     className="flex-1 h-14 rounded-xl text-sm font-display font-medium bg-slate-600 text-slate-200 hover:bg-slate-500 border border-slate-500/50 transition-colors"
                   >
-                    거부
+                    취소 요청
                   </button>
                 </div>
               )
@@ -782,11 +813,61 @@ export default function SellerPhoneContent({
       )}
       </div>
       </div>
+      {/* 매칭 확인 단계: 판매자 거절 시 사유 선택 모달 (선택 후 확인 → 첫화면, 구매자에게 2초 메시지) */}
+      {showSellerConfirmingDeclineModal && sellerConfirmingDeclineMatchId && onDeclineMatchMulti && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
+          <div className="w-full max-w-[240px] glass-cyber p-4 border-white/10">
+            <p className="text-slate-100 font-bold text-sm mb-3">거절 사유 선택</p>
+            <div className="space-y-2 mb-4">
+              {sellerConfirmingDeclineOptions.map((option, i) => (
+                <label key={i} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="sellerConfirmingDeclineReason"
+                    checked={sellerConfirmingDeclineReason === option}
+                    onChange={() => setSellerConfirmingDeclineReason(option)}
+                    className="border-slate-500 bg-slate-700 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <span className="text-slate-300 text-sm">{i + 1}. {option}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSellerConfirmingDeclineModal(false);
+                  setSellerConfirmingDeclineMatchId(null);
+                  setSellerConfirmingDeclineReason(null);
+                }}
+                className="flex-1 py-2 rounded-xl text-sm font-medium bg-slate-600 text-slate-200 hover:bg-slate-500"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (sellerConfirmingDeclineReason) {
+                    onDeclineMatchMulti(sellerConfirmingDeclineMatchId, undefined, 'seller');
+                    setShowSellerConfirmingDeclineModal(false);
+                    setSellerConfirmingDeclineMatchId(null);
+                    setSellerConfirmingDeclineReason(null);
+                  }
+                }}
+                disabled={!sellerConfirmingDeclineReason}
+                className="flex-1 py-2 rounded-xl text-sm font-medium btn-success disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 거부 사유 모달: 단일/다중 공통 — 항상 최상위에 렌더해 다중 카드일 때도 표시 */}
       {showSellerRejectModal && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 rounded-2xl">
           <div className="w-full max-w-[240px] glass-cyber p-4 border-2 border-red-500">
-            <p className="text-slate-100 font-bold text-sm mb-3">거부 사유 선택</p>
+            <p className="text-slate-100 font-bold text-sm mb-3">취소 요청 사유</p>
             <div className="space-y-2 mb-4">
               {sellerRejectReasonOptions.map((option, i) => (
                 <label key={i} className="flex items-center gap-2 cursor-pointer">
