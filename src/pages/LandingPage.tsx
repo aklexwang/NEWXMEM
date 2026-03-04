@@ -227,9 +227,9 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
               descLine2="거래의 잔액이 남아 있으면 다음 매칭상대자를 찾습니다."
               isLast={true}
             />
-            {/* 거래·매칭 그래픽 — 미매칭분 글 바로 아래 */}
-            <div className="flex justify-center mt-12" aria-hidden>
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80">
+            {/* 거래·매칭 그래픽 — 미매칭분 글 바로 아래 (애니메이션 유지) */}
+            <div className="flex justify-center mt-12 overflow-visible" aria-hidden>
+            <div className="relative w-64 h-64 sm:w-80 sm:h-80 overflow-visible">
               <div className="absolute inset-0 rounded-full bg-transparent animate-matching-glow-pulse" style={{ boxShadow: 'inset 0 0 60px rgba(6,182,212,0.15), 0 0 40px rgba(6,182,212,0.2), 0 0 80px rgba(6,182,212,0.1)' }} />
               <div className="absolute inset-4 rounded-full border-2 border-cyan-400/40 animate-matching-ring-pulse" style={{ boxShadow: '0 0 30px rgba(6,182,212,0.3), inset 0 0 30px rgba(6,182,212,0.1)' }} />
               <div className="absolute inset-8 rounded-full border border-cyan-300/30 animate-matching-ring-pulse" style={{ boxShadow: '0 0 20px rgba(34,211,238,0.25)', animationDelay: '0.3s' }} />
@@ -365,28 +365,27 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
         </div>
       </section>
 
-      {/* 구매·판매 진행 모습 — CTA 위 */}
+      {/* 구매·판매 진행 모습 — CTA 위 (4단계 플로우 카드) */}
       <section className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden">
         <div className="absolute inset-0 bg-slate-950/50" />
         <div className="relative z-10 w-full max-w-7xl mx-auto min-w-0 px-2">
           <SectionTitle sub="Process">구매와 판매의 진행</SectionTitle>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-10 lg:gap-12">
-            <div className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0">
-              <img src={`${import.meta.env.BASE_URL}images/buyer-seller-flow.png`} alt="금액 입력 — 구매자·판매자 화면" className="w-full h-auto object-contain bg-slate-900/80" style={{ minHeight: '400px' }} loading="lazy" />
-              <p className="p-4 sm:p-5 bg-slate-800/90 text-cyan-300 text-sm sm:text-base font-display font-medium text-center border-t border-slate-600/40">1. 금액 입력</p>
-            </div>
-            <div className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0">
-              <img src={`${import.meta.env.BASE_URL}images/buyer-seller-flow.png`} alt="AI 매칭 — 구매자·판매자 화면" className="w-full h-auto object-contain bg-slate-900/80" style={{ minHeight: '400px' }} loading="lazy" />
-              <p className="p-4 sm:p-5 bg-slate-800/90 text-cyan-300 text-sm sm:text-base font-display font-medium text-center border-t border-slate-600/40">2. AI 매칭</p>
-            </div>
-            <div className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0">
-              <img src={`${import.meta.env.BASE_URL}images/buyer-seller-flow.png`} alt="거래·확인 — 구매자·판매자 화면" className="w-full h-auto object-contain bg-slate-900/80" style={{ minHeight: '400px' }} loading="lazy" />
-              <p className="p-4 sm:p-5 bg-slate-800/90 text-cyan-300 text-sm sm:text-base font-display font-medium text-center border-t border-slate-600/40">3. 거래·확인</p>
-            </div>
-            <div className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0">
-              <img src={`${import.meta.env.BASE_URL}images/buyer-seller-flow.png`} alt="완료 — 구매자·판매자 화면" className="w-full h-auto object-contain bg-slate-900/80" style={{ minHeight: '400px' }} loading="lazy" />
-              <p className="p-4 sm:p-5 bg-slate-800/90 text-cyan-300 text-sm sm:text-base font-display font-medium text-center border-t border-slate-600/40">4. 완료</p>
-            </div>
+            {[
+              { step: 1, title: '금액 입력', sub: '구매자·판매자 화면', icon: '💰' },
+              { step: 2, title: 'AI 매칭', sub: '구매자·판매자 화면', icon: '🤝' },
+              { step: 3, title: '거래·확인', sub: '구매자·판매자 화면', icon: '✓' },
+              { step: 4, title: '완료', sub: '구매자·판매자 화면', icon: '✔' },
+            ].map(({ step, title, sub, icon }) => (
+              <div key={step} className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0 bg-slate-900/80 flex flex-col">
+                <div className="flex-1 flex flex-col items-center justify-center min-h-[320px] sm:min-h-[400px] p-6 text-center">
+                  <span className="text-5xl sm:text-6xl mb-4 opacity-90" aria-hidden>{icon}</span>
+                  <p className="text-slate-300 font-display font-medium text-lg">{title}</p>
+                  <p className="text-slate-500 text-sm mt-1">{sub}</p>
+                </div>
+                <p className="p-4 sm:p-5 bg-slate-800/90 text-cyan-300 text-sm sm:text-base font-display font-medium text-center border-t border-slate-600/40">{step}. {title}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
