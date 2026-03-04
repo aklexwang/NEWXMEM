@@ -8,6 +8,7 @@ import SellerPhoneContent, { type SellerPhoneContentProps } from './components/s
 import BuyerPhoneContent from './components/simulator/BuyerPhoneContent';
 import BuyerMultiSellerSimulator from './components/simulator/BuyerMultiSellerSimulator';
 import { playMatchSoundLoop, stopMatchSound } from './utils/matchSound';
+import LandingPage from './pages/LandingPage';
 
 const MAX_BUYERS = 5;
 const MAX_SELLERS = 5;
@@ -143,6 +144,7 @@ export default function App() {
     createInitialBuyerSlot(0),
   ]);
   const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
+  const [showSimulator, setShowSimulator] = useState(false);
 
   /** 다중 동시 매칭 (판매자 1 · 구매자 N): 먼저 들어온 순 배분, 건별 독립 타이머/수락/거래 */
   const [scheduledMatches, setScheduledMatches] = useState<ScheduledMatch[]>([]);
@@ -1430,6 +1432,10 @@ export default function App() {
     setTimerEdit(null);
   }, []);
 
+  if (!showSimulator) {
+    return <LandingPage onEnterSimulator={() => setShowSimulator(true)} />;
+  }
+
   const timerFields: { key: keyof SimConfig; min: number; max: number }[] = [
     { key: 'matchDelaySeconds', min: 0.1, max: 30 },
     { key: 'confirmDelaySeconds', min: 0.1, max: 10 },
@@ -1461,10 +1467,20 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center mesh-bg py-4 px-3 sm:py-6 sm:px-4 md:py-8 lg:py-10 lg:px-4 overflow-auto scrollbar-hide">
-      <h1 className="text-slate-300/90 text-xs sm:text-sm font-display font-medium tracking-[0.15em] sm:tracking-[0.2em] mb-3 sm:mb-4">실시간 매칭 시뮬레이터</h1>
+      <div className="w-full max-w-[1200px] flex items-center justify-between gap-3 mb-3 sm:mb-4 px-2">
+        <button
+          type="button"
+          onClick={() => setShowSimulator(false)}
+          className="text-slate-500 hover:text-cyan-400 text-xs font-display font-medium tracking-wide transition-colors flex-shrink-0"
+        >
+          ← 소개로 돌아가기
+        </button>
+        <h1 className="text-slate-300/90 text-xs sm:text-sm font-display font-medium tracking-[0.15em] sm:tracking-[0.2em]">실시간 매칭 시뮬레이터</h1>
+        <span className="w-20 flex-shrink-0" aria-hidden />
+      </div>
 
-      {/* 타이머/지연 설정 패널 */}
-      <section className="w-full max-w-[1200px] min-w-0 mx-auto mb-4 sm:mb-6 px-6 sm:px-8">
+      {/* 타이머/지연 설정 패널 (어드민 — 숨김) */}
+      <section className="hidden w-full max-w-[1200px] min-w-0 mx-auto mb-4 sm:mb-6 px-6 sm:px-8">
         <div className="rounded-2xl overflow-hidden bg-gradient-to-b from-slate-800/95 to-slate-800/80 shadow-xl shadow-slate-900/50 ring-1 ring-cyan-500/20 backdrop-blur-sm">
           <div className="px-8 pt-5 pb-1 sm:px-12 sm:pt-6 border-b border-slate-600/40">
             <div className="flex flex-wrap items-center justify-between gap-3">
