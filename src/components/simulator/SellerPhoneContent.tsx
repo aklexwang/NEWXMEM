@@ -241,14 +241,26 @@ export default function SellerPhoneContent({
         <span className="text-slate-400 text-[10px] sm:text-xs font-display font-bold truncate min-w-0" title={memberId}>
           회원아이디 {memberId}
         </span>
-        {violationHistory.length > 0 && hasNewViolations ? (
-          <button
-            type="button"
-            onClick={() => setShowViolationModal(true)}
-            className={`flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border bg-slate-800/80 transition-colors ${hasNewViolations ? 'animate-violation-btn-blink border-red-400/60' : 'border-slate-600/60 hover:border-cyan-500/50'}`}
-          >
-            위반내역
-          </button>
+        {violationHistory.length > 0 ? (
+          hasNewViolations ? (
+            <button
+              type="button"
+              onClick={() => setShowViolationModal(true)}
+              className={`flex-shrink-0 py-1.5 px-2.5 rounded-lg text-xs font-display text-slate-400 hover:text-cyan-400 border bg-slate-800/80 transition-colors animate-violation-btn-blink border-red-400/60`}
+            >
+              위반내역
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowViolationModal(true)}
+              className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-amber-400/10 border border-slate-600/60 hover:border-cyan-500/50 hover:bg-amber-400/20 transition-colors cursor-pointer"
+              title="위반내역 보기"
+            >
+              {/* 노란 카드(경고 카드) 느낌 - 클릭 시 위반내역 모달 */}
+              <span className="w-4 h-6 rounded-sm bg-amber-400 shadow-md border border-amber-500/30 rotate-[-6deg]" />
+            </button>
+          )
         ) : (
           <span className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-amber-400/10" title="위반 없음" aria-hidden>
             {/* 노란 카드(경고 카드) 느낌 - 20% 축소 */}
