@@ -251,10 +251,15 @@ export default function BuyerPhoneContent({
             </button>
           )
         ) : (
-          <span className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-amber-400/10" title="위반 없음" aria-hidden>
-            {/* 노란 카드(경고 카드) 느낌 - 20% 축소 */}
+          <button
+            type="button"
+            onClick={() => setShowViolationModal(true)}
+            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-amber-400/10 border border-slate-600/60 hover:border-cyan-500/50 hover:bg-amber-400/20 transition-colors cursor-pointer"
+            title="위반내역 보기"
+          >
+            {/* 노란 카드(경고 카드) - 클릭 시 위반내역 모달(내역 없어도 열림) */}
             <span className="w-4 h-6 rounded-sm bg-amber-400 shadow-md border border-amber-500/30 rotate-[-6deg]" />
-          </span>
+          </button>
         )}
       </div>
       {(buyerStarted || (_completedBuyer && !buyerClickedNew) || dispute) ? (
