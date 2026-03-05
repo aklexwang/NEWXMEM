@@ -10,7 +10,7 @@
 배포 전에, 로컬에서 빌드·미리보기로 확인하는 방법입니다.
 
 ```bash
-cd c:\NEWXMEM
+cd c:\NEWXPAY
 npm run build
 npm run preview
 ```
@@ -24,18 +24,18 @@ npm run preview
 ### A. Vercel (가장 간단)
 
 1. [vercel.com](https://vercel.com) 가입 후 로그인
-2. **Add New → Project** 에서 이 폴더(`NEWXMEM`) 연결  
+2. **Add New → Project** 에서 이 폴더(`NEWXPAY`) 연결  
    - GitHub에 올려두었다면 저장소 선택 후 Import
    - 로컬만 있다면 **Vercel CLI** 사용:
      ```bash
      npm i -g vercel
-     cd c:\NEWXMEM
+     cd c:\NEWXPAY
      vercel
      ```
 3. **Build Command**: `npm run build`  
    **Output Directory**: `dist`  
    (보통 자동 인식됨)
-4. 배포 후 나오는 URL(예: `https://newxmem-xxx.vercel.app`)을 공유하면 됩니다.
+4. 배포 후 나오는 URL(예: `https://newxpay-xxx.vercel.app`)을 공유하면 됩니다.
 
 ### B. Netlify
 
@@ -111,10 +111,10 @@ jobs:
 그리고 **`vite.config.ts`** 에서 GitHub Pages 서브 경로를 쓰는 경우에만 `base`를 설정하세요:
 
 ```ts
-// 저장소 이름이 NEWXMEM 이고, https://username.github.io/NEWXMEM/ 로 열리는 경우
+// 저장소 이름이 NEWXPAY 이고, https://username.github.io/NEWXPAY/ 로 열리는 경우
 export default defineConfig({
   plugins: [react()],
-  base: '/NEWXMEM/',
+  base: '/NEWXPAY/',
 })
 ```
 

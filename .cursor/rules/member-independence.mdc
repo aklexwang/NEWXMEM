@@ -1,5 +1,5 @@
 ---
-description: NEWXMEM 매칭/거래 연동 규칙 - 연동은 매칭 확인 후 거래 시에만, 나머지는 회원별 독립
+description: NEWXPAY 매칭/거래 연동 규칙 - 연동은 매칭 확인 후 거래 시에만, 나머지는 회원별 독립
 globs: "**/App.tsx","**/simulator/**/*.tsx"
 alwaysApply: false
 ---

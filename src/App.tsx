@@ -1479,8 +1479,8 @@ export default function App() {
         <span className="w-20 flex-shrink-0" aria-hidden />
       </div>
 
-      {/* 타이머/지연 설정 패널 (어드민 — 숨김) */}
-      <section className="hidden w-full max-w-[1200px] min-w-0 mx-auto mb-4 sm:mb-6 px-6 sm:px-8">
+      {/* 타이머/지연 설정 패널 (어드민) */}
+      <section className="w-full max-w-[1200px] min-w-0 mx-auto mb-4 sm:mb-6 px-6 sm:px-8">
         <div className="rounded-2xl overflow-hidden bg-gradient-to-b from-slate-800/95 to-slate-800/80 shadow-xl shadow-slate-900/50 ring-1 ring-cyan-500/20 backdrop-blur-sm">
           <div className="px-8 pt-5 pb-1 sm:px-12 sm:pt-6 border-b border-slate-600/40">
             <div className="flex flex-wrap items-center justify-between gap-3">

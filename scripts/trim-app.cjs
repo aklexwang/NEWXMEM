@@ -1,6 +1,6 @@
 /**
  * App.tsx에서 826~1683줄(로컌 SellerPhoneContent, BuyerPhoneContent 정의) 제거
- * 실행: 프로젝트 루트(c:\NEWXMEM)에서 node scripts/trim-app.cjs
+ * 실행: 프로젝트 루트(c:\NEWXPAY)에서 node scripts/trim-app.cjs
  */
 const fs = require('fs');
 const path = require('path');
