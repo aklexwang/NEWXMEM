@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store" />
   <title>접근 승인 관리</title>
   <style>
     :root {
@@ -261,7 +262,8 @@
   </style>
 </head>
 <body>
-  <div id="loginScreen" class="login-backdrop" hidden>
+  <!-- JS 없이도 먼저 보이는 것: 로그인(관리 화면은 hidden). 이전에 로그인된 경우만 sessionStorage로 건너뜀 -->
+  <div id="loginScreen" class="login-backdrop">
     <div class="login-card">
       <h2>관리자 로그인</h2>
       <p class="sub">접근 승인 관리 — 허용된 계정만 입장</p>
@@ -296,7 +298,8 @@
 
   <script>
     (function () {
-      const AUTH_OK = "axpay_admin_ok_v1";
+      /** v2: 이전 세션 키 무효(로그인 먼저 강제) */
+      const AUTH_OK = "axpay_admin_ok_v2";
       const ADM_ID = "axpay";
       const ADM_PW = "eoqkrskwk";
       const STORAGE_KEY = "axpay-access-requests";
