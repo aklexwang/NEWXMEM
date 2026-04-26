@@ -72,7 +72,7 @@ const FeatureCard = ({
   className?: string;
 }) => (
   <div
-    className={`group relative rounded-2xl bg-slate-800/60 border border-slate-600/40 p-8 sm:p-10 lg:p-12 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/5 ${className}`.trim()}
+    className={`group relative rounded-2xl bg-slate-800/60 border border-slate-600/40 p-8 sm:p-10 lg:p-12 will-change-transform origin-center transition-[transform,box-shadow,border-color] duration-300 ease-out hover:z-10 hover:scale-[1.04] hover:border-cyan-500/40 hover:shadow-xl hover:shadow-cyan-500/10 ${className}`.trim()}
   >
     <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-6 group-hover:bg-cyan-500/15 transition-colors">
       {icon}
@@ -515,12 +515,12 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
               className="lg:col-start-1 lg:row-start-2"
             />
             <div
-              className="flex items-center justify-center self-stretch overflow-hidden bg-transparent p-2 sm:p-3 lg:col-start-2 lg:row-start-2 lg:min-h-0 min-h-[200px] sm:min-h-[240px]"
+              className="group/ai flex items-center justify-center self-stretch overflow-hidden bg-transparent p-2 sm:p-3 lg:col-start-2 lg:row-start-2 lg:min-h-0 min-h-[200px] sm:min-h-[240px] rounded-2xl origin-center transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:z-10 hover:scale-[1.04] hover:shadow-[0_0_32px_rgba(6,182,212,0.15)]"
             >
               <img
                 src={`${import.meta.env.BASE_URL}ai.gif`}
                 alt="AI 매칭"
-                className="h-auto w-full max-h-[min(40vh,280px)] max-w-[min(100%,380px)] object-contain [image-rendering:auto] [filter:drop-shadow(0_8px_28px_rgba(0,0,0,0.45))]"
+                className="h-auto w-full max-h-[min(40vh,280px)] max-w-[min(100%,380px)] object-contain [image-rendering:auto] [filter:drop-shadow(0_8px_28px_rgba(0,0,0,0.45))] transition-transform duration-300 group-hover/ai:scale-105"
                 loading="lazy"
                 decoding="async"
               />
