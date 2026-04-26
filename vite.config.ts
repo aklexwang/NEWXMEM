@@ -10,4 +10,9 @@ export default defineConfig({
     port: 5173,
     host: true,  // localhost 외 네트워크에서도 접속 가능 (0.0.0.0)
   },
+  /** `npm run build` 산출물 — GitHub Pages에 올리는 것과 동일. 로컬 확인: `npm run check:gh-pages` → http://localhost:4173/NEWXMEM/ */
+  preview: {
+    port: 4173,
+    host: true,
+  },
 })
