@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:verify": "npm run build && node ./scripts/verify-base.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check:gh-pages": "npm run build && vite preview"
+    "check:gh-pages": "npm run build:verify && vite preview"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "react": "^19.2.0",
