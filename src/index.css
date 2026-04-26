@@ -630,6 +630,50 @@
   transform-origin: center bottom;
 }
 
+/* AXPAY 로고: 골드 쉼머 + 입체 글로우 */
+@keyframes axpay-shimmer {
+  0% { background-position: -200% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes axpay-glow-pulse {
+  0%, 100% {
+    filter:
+      drop-shadow(0 2px 12px rgba(0, 0, 0, 0.7))
+      drop-shadow(0 0 22px rgba(251, 191, 36, 0.45))
+      drop-shadow(0 0 44px rgba(251, 191, 36, 0.2));
+  }
+  50% {
+    filter:
+      drop-shadow(0 2px 14px rgba(0, 0, 0, 0.75))
+      drop-shadow(0 0 34px rgba(253, 224, 71, 0.65))
+      drop-shadow(0 0 70px rgba(251, 191, 36, 0.35));
+  }
+}
+.axpay-logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  background-image: linear-gradient(
+    100deg,
+    #b45309 0%,
+    #f59e0b 18%,
+    #fde68a 32%,
+    #fff7cc 44%,
+    #fde68a 56%,
+    #f59e0b 72%,
+    #b45309 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation:
+    axpay-shimmer 6s linear infinite,
+    axpay-glow-pulse 3.6s ease-in-out infinite;
+  text-shadow: 0 0 1px rgba(253, 224, 71, 0.3);
+}
+
 /* 숫자 입력 스피너 제거 */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {

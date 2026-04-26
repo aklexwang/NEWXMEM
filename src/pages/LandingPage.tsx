@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import AIMatchingVisual from '../components/AIMatchingVisual';
 
 type LandingPageProps = {
   onEnterSimulator: () => void;
@@ -95,9 +96,10 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
           {/* fallback: Pixabay 무료 룰렛 영상 (1920x1080) */}
           <source src="https://cdn.pixabay.com/video/2020/11/06/54607-477445139_large.mp4" type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-slate-950/45 pointer-events-none" />
-        <div className="absolute inset-0 mesh-bg opacity-30 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-transparent to-slate-950/60 pointer-events-none" />
+        {/* 어두운 오버레이 완화: 영상 퀄리티 최대한 보존 + 상·하단만 비네팅 */}
+        <div className="absolute inset-0 bg-slate-950/25 pointer-events-none" />
+        <div className="absolute inset-0 mesh-bg opacity-20 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/45 via-transparent to-slate-950/55 pointer-events-none" />
         <div className="relative z-10 w-full max-w-5xl mx-auto text-center min-w-0 px-2">
           <h1 className="text-3xl min-[400px]:text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-tight mb-16 flex flex-wrap items-baseline justify-center gap-x-2 sm:gap-x-3 gap-y-4">
             <span className="text-amber-200 font-medium tracking-[0.15em] min-[400px]:tracking-[0.25em] uppercase inline-block drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] break-words max-w-full">
@@ -105,7 +107,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
                 <span key={i} className="animate-char-pop inline-block" style={{ animationDelay: `${i * 0.12}s` }}>{char}</span>
               ))}
             </span>
-            <span className="bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200 bg-clip-text text-transparent drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)] text-6xl min-[400px]:text-7xl sm:text-8xl md:text-[7.5rem] lg:text-[9rem]">NEWXPAY</span>
+            <span className="axpay-logo text-7xl min-[400px]:text-8xl sm:text-9xl md:text-[8.5rem] lg:text-[10rem]">AXPAY</span>
           </h1>
           <p className="text-amber-100/95 text-lg sm:text-xl max-w-2xl mx-auto leading-loose mb-14 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]" style={{ lineHeight: 1.9 }}>
             판매자와 구매자를 실시간으로 연결하고,
@@ -117,7 +119,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
             onClick={onEnterSimulator}
             className="text-base sm:text-lg px-8 py-4 rounded-2xl font-display font-semibold bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 text-slate-900 shadow-[0_0_24px_rgba(251,191,36,0.4)] hover:shadow-[0_0_32px_rgba(251,191,36,0.5)] transition-shadow"
           >
-            시뮬레이터 체험하기
+            AXPAY 체험하기
           </button>
         </div>
       </header>
@@ -126,40 +128,139 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       <section className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden">
         <div className="absolute inset-0 bg-slate-950/70" />
         <div className="relative z-10 w-full max-w-7xl mx-auto min-w-0 px-2">
+          {/* 핵심 혜택 하이라이트 배지 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 mb-20 sm:mb-24">
+            {/* 1. 가장 낮은 수수료 */}
+            <div className="group relative rounded-3xl border border-amber-500/30 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-slate-900/90 px-6 sm:px-8 py-10 sm:py-12 overflow-hidden shadow-2xl shadow-amber-500/10 hover:border-amber-400/60 hover:shadow-amber-500/20 transition-all duration-300 text-center">
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-yellow-600/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative flex flex-col items-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400/20 to-yellow-600/20 border border-amber-400/40 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                </div>
+                <p className="mt-5 text-amber-300/90 text-xs sm:text-sm font-display tracking-[0.28em] uppercase">
+                  Lowest Fee
+                </p>
+                <p className="mt-5 bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-200 bg-clip-text text-transparent text-6xl sm:text-7xl font-display font-extrabold leading-none">
+                  0.1<span className="text-4xl sm:text-5xl align-top">%</span>
+                </p>
+                <div className="mt-5 h-px w-12 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+                <p className="mt-5 text-slate-200 text-lg sm:text-xl font-display font-semibold leading-snug whitespace-nowrap">
+                  가장 낮은 수수료
+                </p>
+              </div>
+            </div>
+
+            {/* 2. 24시간 실시간 정산 */}
+            <div className="group relative rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-slate-900/90 px-6 sm:px-8 py-10 sm:py-12 overflow-hidden shadow-2xl shadow-cyan-500/10 hover:border-cyan-400/60 hover:shadow-cyan-500/20 transition-all duration-300 text-center">
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative flex flex-col items-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-blue-600/20 border border-cyan-400/40 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <polyline points="12 7 12 12 15 14" />
+                  </svg>
+                </div>
+                <p className="mt-5 text-cyan-300/90 text-xs sm:text-sm font-display tracking-[0.28em] uppercase">
+                  Realtime
+                </p>
+                <p className="mt-5 bg-gradient-to-r from-cyan-200 via-cyan-300 to-blue-300 bg-clip-text text-transparent text-6xl sm:text-7xl font-display font-extrabold leading-none">
+                  24<span className="text-4xl sm:text-5xl align-top">H</span>
+                </p>
+                <div className="mt-5 h-px w-12 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" />
+                <p className="mt-5 text-slate-200 text-lg sm:text-xl font-display font-semibold leading-snug whitespace-nowrap">
+                  24시간 실시간 정산
+                </p>
+              </div>
+            </div>
+
+            {/* 3. API 설치/무설치 버전 제공 */}
+            <div className="group relative rounded-3xl border border-violet-400/30 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-slate-900/90 px-6 sm:px-8 py-10 sm:py-12 overflow-hidden shadow-2xl shadow-violet-500/10 hover:border-violet-400/60 hover:shadow-violet-500/20 transition-all duration-300 text-center">
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-fuchsia-600/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative flex flex-col items-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-400/20 to-purple-600/20 border border-violet-400/40 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="16 18 22 12 16 6" />
+                    <polyline points="8 6 2 12 8 18" />
+                  </svg>
+                </div>
+                <p className="mt-5 text-violet-300/90 text-xs sm:text-sm font-display tracking-[0.28em] uppercase">
+                  Flexible
+                </p>
+                <p className="mt-5 bg-gradient-to-r from-violet-200 via-fuchsia-300 to-violet-200 bg-clip-text text-transparent text-6xl sm:text-7xl font-display font-extrabold leading-none">
+                  API
+                </p>
+                <div className="mt-5 h-px w-12 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent" />
+                <p className="mt-5 text-slate-200 text-lg sm:text-xl font-display font-semibold leading-snug whitespace-nowrap">
+                  설치 / 무설치 버전 제공
+                </p>
+              </div>
+            </div>
+
+            {/* 4. 3년간 무사고 운영 */}
+            <div className="group relative rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-slate-900/90 px-6 sm:px-8 py-10 sm:py-12 overflow-hidden shadow-2xl shadow-emerald-500/10 hover:border-emerald-400/60 hover:shadow-emerald-500/20 transition-all duration-300 text-center">
+              <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-teal-600/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative flex flex-col items-center">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400/20 to-teal-600/20 border border-emerald-400/40 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <polyline points="9 12 11 14 15 10" />
+                  </svg>
+                </div>
+                <p className="mt-5 text-emerald-300/90 text-xs sm:text-sm font-display tracking-[0.28em] uppercase">
+                  Zero Incident
+                </p>
+                <p className="mt-5 bg-gradient-to-r from-emerald-200 via-green-300 to-emerald-200 bg-clip-text text-transparent text-6xl sm:text-7xl font-display font-extrabold leading-none">
+                  3<span className="text-4xl sm:text-5xl align-top">Y</span>
+                </p>
+                <div className="mt-5 h-px w-12 bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent" />
+                <p className="mt-5 text-slate-200 text-lg sm:text-xl font-display font-semibold leading-snug whitespace-nowrap">
+                  3년간 무사고 운영
+                </p>
+              </div>
+            </div>
+          </div>
+
           <SectionTitle sub="Visual">P2P와 디지털 거래</SectionTitle>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8 lg:gap-10 min-w-0">
-            <a href="https://unsplash.com/s/photos/digital-payment" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=600&q=80" alt="디지털 결제" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">디지털 결제</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/peer-to-peer" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=600&q=80" alt="P2P 연결" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">P2P 연결</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/money-transfer" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&q=80" alt="송금·이체" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">송금·이체</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/fintech" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&q=80" alt="핀테크" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">핀테크</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/secure-transaction" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1563986768609-322da13575f3?w=600&q=80" alt="안전 거래" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">안전 거래</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/mobile-banking" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=600&q=80" alt="모바일 뱅킹" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">모바일 뱅킹</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/real-time" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
-              <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&q=80" alt="실시간 매칭" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+              <img src="https://images.unsplash.com/photo-1655635949212-1d8f4f103ea1?w=600&q=80" alt="실시간 매칭" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">실시간 매칭</p>
-            </a>
-            <a href="https://unsplash.com/s/photos/trust-security" target="_blank" rel="noopener noreferrer" className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
+            </div>
+            <div className="group block rounded-2xl overflow-hidden border border-slate-600/40 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 shadow-xl min-w-0">
               <img src="https://images.unsplash.com/photo-1563986768494-4dee2763ff3f?w=600&q=80" alt="신뢰·검증" className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
               <p className="p-4 sm:p-5 bg-slate-800/95 text-slate-300 text-sm font-display text-center border-t border-slate-600/40">신뢰·검증</p>
-            </a>
+            </div>
           </div>
         </div>
       </section>
@@ -168,21 +269,123 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       <section className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden">
         <div className="absolute inset-0 bg-slate-950/50" />
         <div className="relative z-10 w-full max-w-6xl mx-auto min-w-0 px-2">
-          <SectionTitle sub="About">NEWXPAY이란</SectionTitle>
-          <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-center">
-            <div className="flex-shrink-0 w-full lg:max-w-[28rem] rounded-2xl overflow-hidden border border-slate-600/40 shadow-2xl">
-              <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80" alt="P2P 플랫폼 연결 개념" className="w-full aspect-video object-cover" loading="lazy" />
+          <SectionTitle sub="About">AXPAY이란</SectionTitle>
+          <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-center justify-center">
+            <div
+              className="flex-shrink-0 w-full lg:max-w-[28rem]"
+              style={{ aspectRatio: '360 / 680' }}
+            >
+              <AIMatchingVisual />
             </div>
-            <div className="rounded-3xl bg-slate-800/40 border border-slate-600/40 p-10 sm:p-14 lg:p-16 backdrop-blur-sm flex-1">
-            <p className="text-slate-300 text-base sm:text-lg leading-relaxed text-center lg:text-left max-w-3xl mx-auto lg:mx-0">
-              포인트를 <span className="text-cyan-300 font-medium">판매</span>하려는 회원과{' '}
-              <span className="text-amber-300 font-medium">구매</span>하려는 회원을 AI 매칭으로 연결하고,
-              거래 단계별로 <span className="text-slate-200 font-medium">확인 · 입금 · 입금확인</span>을
-              진행하는 P2P 플랫폼의 동작을 브라우저에서 그대로 시뮬레이션할 수 있습니다.
-            </p>
-            <p className="text-slate-500 text-sm sm:text-base leading-relaxed text-center lg:text-left max-w-2xl mx-auto lg:mx-0 mt-4">
-              실제 서버 없이 데모 데이터로 동작하며, 다중 구매자·다중 판매자 시나리오와 타이머·위반·분쟁 처리까지 포함합니다.
-            </p>
+            <div
+              className="flex-shrink-0 w-full lg:max-w-[28rem] flex flex-col p-10 sm:p-12"
+              style={{
+                aspectRatio: '360 / 680',
+                background:
+                  'linear-gradient(135deg, #fafbfc 0%, #eef2f7 55%, #e2e8f0 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.8)',
+                borderRadius: 48,
+                boxShadow: '0 40px 80px rgba(0, 0, 0, 0.35)',
+                color: '#1E293B',
+              }}
+            >
+              {/* 헤더: 폰 카드와 동일한 배지 스타일 */}
+              <div className="flex justify-between items-center">
+                <div
+                  className="flex items-center"
+                  style={{
+                    fontWeight: 800,
+                    fontSize: 14,
+                    letterSpacing: 1,
+                    color: '#10B981',
+                  }}
+                >
+                  <svg
+                    width={20}
+                    height={20}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={3}
+                    style={{ marginRight: 8 }}
+                  >
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                  </svg>
+                  AXPAY
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    padding: '6px 12px',
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    color: '#10B981',
+                    borderRadius: 100,
+                    fontWeight: 600,
+                  }}
+                >
+                  소개
+                </div>
+              </div>
+
+              {/* 타이틀 + 본문: 카드 중앙으로 정렬 */}
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-2">
+                <p className="text-slate-500 text-[11px] tracking-[0.35em] font-semibold">
+                  ABOUT PLATFORM
+                </p>
+                <h3 className="mt-3 text-slate-900 text-2xl sm:text-3xl font-bold leading-tight">
+                  P2P 매칭을
+                  <br />한 화면에서
+                </h3>
+                <span
+                  className="block mt-5 h-[2px] w-10 rounded-full"
+                  style={{ background: '#10B981' }}
+                />
+                <div className="mt-5 text-slate-700 text-sm sm:text-base leading-relaxed space-y-4">
+                  <p>포인트를 <span className="text-emerald-600 font-semibold">판매</span>하려는 회원과</p>
+                  <p><span className="text-amber-600 font-semibold">구매</span>하려는 회원을</p>
+                  <p>AI 매칭으로 연결하고,</p>
+                  <p>거래 단계별로</p>
+                  <p><span className="text-slate-900 font-semibold">확인 · 입금 · 입금확인</span>을</p>
+                  <p>진행합니다.</p>
+                </div>
+              </div>
+
+              {/* 포인트 리스트 — 하단을 채우는 3줄 */}
+              <div className="mt-auto pt-6 space-y-3 border-t border-slate-300/60">
+                <div className="flex items-start gap-3">
+                  <span
+                    className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
+                    style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669' }}
+                  >
+                    01
+                  </span>
+                  <span className="text-slate-700 text-sm leading-snug">
+                    실시간 <span className="font-semibold text-slate-900">AI 매칭</span> 엔진
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span
+                    className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
+                    style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669' }}
+                  >
+                    02
+                  </span>
+                  <span className="text-slate-700 text-sm leading-snug">
+                    다중 구매자·판매자 시나리오 지원
+                  </span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span
+                    className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
+                    style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669' }}
+                  >
+                    03
+                  </span>
+                  <span className="text-slate-700 text-sm leading-snug">
+                    타이머·위반·분쟁 처리까지 완비
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -227,43 +430,6 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
               descLine2="거래의 잔액이 남아 있으면 다음 매칭상대자를 찾습니다."
               isLast={true}
             />
-            {/* 거래·매칭 그래픽 — 미매칭분 글 바로 아래 (애니메이션 유지) */}
-            <div className="flex justify-center mt-12 overflow-visible" aria-hidden>
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80 overflow-visible">
-              <div className="absolute inset-0 rounded-full bg-transparent animate-matching-glow-pulse" style={{ boxShadow: 'inset 0 0 60px rgba(6,182,212,0.15), 0 0 40px rgba(6,182,212,0.2), 0 0 80px rgba(6,182,212,0.1)' }} />
-              <div className="absolute inset-4 rounded-full border-2 border-cyan-400/40 animate-matching-ring-pulse" style={{ boxShadow: '0 0 30px rgba(6,182,212,0.3), inset 0 0 30px rgba(6,182,212,0.1)' }} />
-              <div className="absolute inset-8 rounded-full border border-cyan-300/30 animate-matching-ring-pulse" style={{ boxShadow: '0 0 20px rgba(34,211,238,0.25)', animationDelay: '0.3s' }} />
-              <div className="absolute inset-10 rounded-full border-2 border-cyan-200/90 bg-slate-900/80 animate-matching-inner-glow overflow-visible" style={{ boxShadow: '0 0 24px rgba(34,211,238,0.6), 0 0 48px rgba(6,182,212,0.3), inset 0 0 40px rgba(6,182,212,0.15)' }}>
-                <div className="absolute inset-0 w-full h-full animate-matching-orb-orbit pointer-events-none" style={{ transformOrigin: 'center center' }}>
-                  <div className="absolute left-1/2 top-0 w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-300 border-2 border-white/80" style={{ boxShadow: '0 0 12px rgba(34,211,238,0.9), 0 0 24px rgba(6,182,212,0.6)' }} />
-                </div>
-                <div className="absolute inset-0 w-full h-full rounded-full animate-matching-fluid-rotate pointer-events-none" style={{ transformOrigin: 'center center' }}>
-                  <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full rounded-full overflow-visible" style={{ filter: 'drop-shadow(0 0 10px rgba(34,211,238,0.7))' }}>
-                    <defs>
-                      <linearGradient id="fluid-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#22d3ee" />
-                        <stop offset="50%" stopColor="#06b6d4" />
-                        <stop offset="100%" stopColor="#0891b2" />
-                      </linearGradient>
-                      <radialGradient id="fluid-inner" cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stopColor="rgba(34,211,238,0.9)" />
-                        <stop offset="100%" stopColor="rgba(6,182,212,0.5)" />
-                      </radialGradient>
-                      <filter id="glow">
-                        <feGaussianBlur stdDeviation="2" result="blur" />
-                        <feMerge>
-                          <feMergeNode in="blur" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                    </defs>
-                    <path fill="url(#fluid-cyan)" filter="url(#glow)" opacity="0.9" d="M50 20 C70 22 78 40 75 55 C72 72 55 82 50 80 C45 82 28 72 25 55 C22 40 30 22 50 20 Z M50 28 C64 30 70 42 68 54 C66 66 54 74 50 73 C46 74 34 66 32 54 C30 42 36 30 50 28 Z" />
-                    <path fill="url(#fluid-inner)" filter="url(#glow)" opacity="0.85" d="M50 38 C58 40 62 48 61 55 C60 62 54 68 50 67 C46 68 40 62 39 55 C38 48 42 40 50 38 Z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-            </div>
           </div>
         </div>
       </section>
@@ -397,7 +563,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold text-slate-100 mb-6">
             직접 흐름을 체험해 보세요
           </h2>
-          <p className="text-slate-400 text-lg sm:text-xl mb-12 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-slate-400 text-lg sm:text-xl mb-12 mx-auto leading-relaxed whitespace-nowrap overflow-x-auto">
             판매자·구매자 화면을 나란히 두고, 매칭부터 완료까지 한 번에 확인할 수 있습니다.
           </p>
           <button
@@ -405,22 +571,15 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
             onClick={onEnterSimulator}
             className="btn-primary text-lg sm:text-xl px-12 py-5 rounded-2xl"
           >
-            시뮬레이터 시작
+            AXPAY 체험하기
           </button>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="border-t border-slate-700/50 py-12 px-6 sm:px-8 lg:px-12 overflow-x-hidden">
-        <div className="w-full max-w-6xl mx-auto min-w-0 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <span className="text-slate-500 text-base font-display">NEWXPAY · P2P 매칭 시뮬레이터</span>
-          <button
-            type="button"
-            onClick={onEnterSimulator}
-            className="text-cyan-400/90 hover:text-cyan-300 text-sm font-display font-medium transition-colors"
-          >
-            시뮬레이터로 이동 →
-          </button>
+        <div className="w-full max-w-6xl mx-auto min-w-0 flex items-center justify-center">
+          <span className="text-slate-500 text-base font-display text-center">AXPAY · P2P 매칭 솔루션</span>
         </div>
       </footer>
     </div>

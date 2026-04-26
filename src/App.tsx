@@ -130,6 +130,9 @@ function createInitialBuyerSlot(index: number, config: SimConfig = DEFAULT_SIM_C
  */
 export default function App() {
   const MIN_POINT_AMOUNT = 10_000;
+  const ACCESS_REQUESTS_STORAGE_KEY = 'axpay-access-requests';
+  /** 체험 승인 후 이동할 URL (관리자 승인 시) */
+  const APPROVED_EXPERIENCE_URL = 'http://tg.xpaykr.com/?id=2041728433591128064';
   /** 만원 단위만 허용 (10,000 / 20,000 / 30,000 ...). 12,000원, 10,500원 등 불가 */
   const isValidAmount = (n: number) => n >= MIN_POINT_AMOUNT && n % 10_000 === 0;
 
@@ -145,6 +148,61 @@ export default function App() {
   ]);
   const [matchedBuyerIndex, setMatchedBuyerIndex] = useState<number | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [siteNameInput, setSiteNameInput] = useState('');
+  const [siteUrlInput, setSiteUrlInput] = useState('');
+  const [accessStatus, setAccessStatus] = useState<'idle' | 'pending' | 'rejected'>('idle');
+  const [currentAccessRequestId, setCurrentAccessRequestId] = useState<string | null>(null);
+  type AccessRequest = {
+    id: string;
+    siteName: string;
+    siteUrl: string;
+    status: 'pending' | 'approved' | 'rejected';
+    createdAt: number;
+  };
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>(() => {
+    try {
+      const raw = localStorage.getItem(ACCESS_REQUESTS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as AccessRequest[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveAccessRequests = useCallback((next: AccessRequest[]) => {
+    setAccessRequests(next);
+    localStorage.setItem(ACCESS_REQUESTS_STORAGE_KEY, JSON.stringify(next));
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== ACCESS_REQUESTS_STORAGE_KEY || !event.newValue) return;
+      try {
+        const parsed = JSON.parse(event.newValue) as AccessRequest[];
+        if (Array.isArray(parsed)) setAccessRequests(parsed);
+      } catch {
+        // ignore invalid storage payload
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  useEffect(() => {
+    if (!currentAccessRequestId) return;
+    const current = accessRequests.find((r) => r.id === currentAccessRequestId);
+    if (!current) return;
+    if (current.status === 'approved') {
+      setShowAccessModal(false);
+      window.location.assign(APPROVED_EXPERIENCE_URL);
+      return;
+    }
+    if (current.status === 'rejected') {
+      setAccessStatus('rejected');
+    }
+  }, [currentAccessRequestId, accessRequests]);
 
   /** 다중 동시 매칭 (판매자 1 · 구매자 N): 먼저 들어온 순 배분, 건별 독립 타이머/수락/거래 */
   const [scheduledMatches, setScheduledMatches] = useState<ScheduledMatch[]>([]);
@@ -1433,7 +1491,126 @@ export default function App() {
   }, []);
 
   if (!showSimulator) {
-    return <LandingPage onEnterSimulator={() => setShowSimulator(true)} />;
+    const trimmedSiteName = siteNameInput.trim();
+    const trimmedSiteUrl = siteUrlInput.trim();
+    const canSubmitAccess = trimmedSiteName.length > 0 && trimmedSiteUrl.length > 0;
+    return (
+      <>
+        <LandingPage
+          onEnterSimulator={() => {
+            setShowAccessModal(true);
+            setAccessStatus('idle');
+          }}
+        />
+        <a
+          href={`${import.meta.env.BASE_URL}access-admin.html`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed top-4 right-4 z-[110] h-10 px-4 rounded-xl border border-cyan-400/60 bg-slate-900/80 text-cyan-300 hover:bg-slate-800 transition-colors inline-flex items-center"
+        >
+          승인 관리
+        </a>
+        {showAccessModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 bg-slate-950/75 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-600/60 bg-slate-900/95 shadow-2xl p-6 sm:p-7">
+              <h2 className="text-slate-100 text-xl sm:text-2xl font-display font-semibold mb-2 text-center">
+                체험 접근 인증
+              </h2>
+              <p className="text-slate-400 text-sm sm:text-base mb-6 leading-relaxed text-center">
+                테스트 계정에 보유금액을 7,777,777 원으로 맞춰 주세요
+              </p>
+
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="block text-slate-300 text-sm font-display mb-2">사이트 이름</span>
+                  <input
+                    type="text"
+                    value={siteNameInput}
+                    onChange={(e) => setSiteNameInput(e.target.value)}
+                    placeholder="사이트명을 적어주세요...."
+                    className="w-full h-11 rounded-xl border border-slate-600/60 bg-slate-800/80 px-3 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/60"
+                    disabled={accessStatus === 'pending'}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-slate-300 text-sm font-display mb-2">사이트 주소</span>
+                  <input
+                    type="text"
+                    value={siteUrlInput}
+                    onChange={(e) => setSiteUrlInput(e.target.value)}
+                    placeholder="예: https://example.com"
+                    className="w-full h-11 rounded-xl border border-slate-600/60 bg-slate-800/80 px-3 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/60"
+                    disabled={accessStatus === 'pending'}
+                  />
+                </label>
+
+                <div className="rounded-xl border border-slate-700/70 bg-slate-800/70 px-4 py-3">
+                  <p className="text-slate-400 text-xs mb-2">아이디 비번은 아래와 같이 설정해서 전달주시면 됩니다.</p>
+                  <p className="text-slate-200 text-sm flex flex-wrap items-baseline gap-x-3 sm:gap-x-4">
+                    <span>
+                      아이디: <span className="font-semibold">axpay</span>
+                    </span>
+                    <span>
+                      패스워드: <span className="font-semibold">123456</span>
+                    </span>
+                  </p>
+                </div>
+
+                {accessStatus === 'pending' && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                    <p className="text-amber-200 text-sm font-medium">
+                      관리자 승인중입니다.
+                    </p>
+                  </div>
+                )}
+                {accessStatus === 'rejected' && (
+                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+                    <p className="text-red-200 text-sm font-medium">
+                      관리자 거부로 접근이 제한되었습니다.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAccessModal(false);
+                    setAccessStatus('idle');
+                    setCurrentAccessRequestId(null);
+                  }}
+                  className="h-10 px-4 rounded-xl border border-slate-600/70 text-slate-300 hover:text-slate-100 hover:border-slate-500 transition-colors"
+                >
+                  닫기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = Date.now();
+                    const newRequest: AccessRequest = {
+                      id: `req-${now}-${Math.random().toString(36).slice(2, 8)}`,
+                      siteName: trimmedSiteName,
+                      siteUrl: trimmedSiteUrl,
+                      status: 'pending',
+                      createdAt: now,
+                    };
+                    saveAccessRequests([newRequest, ...accessRequests].slice(0, 100));
+                    setCurrentAccessRequestId(newRequest.id);
+                    setAccessStatus('pending');
+                  }}
+                  disabled={!canSubmitAccess || accessStatus === 'pending'}
+                  className="h-10 px-4 rounded-xl bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
   }
 
   const timerFields: { key: keyof SimConfig; min: number; max: number }[] = [

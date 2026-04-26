@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>접근 승인 관리</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #020617;
+      color: #e2e8f0;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 16px 36px;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .hint {
+      margin: 6px 0 0;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .btn {
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
+    .btn:hover { background: #1e293b; }
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+    .item {
+      border: 1px solid #334155;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 14px;
+    }
+    .name { font-size: 16px; font-weight: 600; margin: 0; }
+    .url {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: #94a3b8;
+      word-break: break-all;
+    }
+    .meta {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .row {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .approve {
+      border: 1px solid #059669;
+      background: #065f46;
+      color: #ecfdf5;
+    }
+    .approve:hover { background: #047857; }
+    .reject {
+      border: 1px solid #be123c;
+      background: #881337;
+      color: #fff1f2;
+    }
+    .reject:hover { background: #9f1239; }
+    .state {
+      display: inline-flex;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .pending { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+    .approved { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .rejected { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
+    .empty {
+      border: 1px dashed #334155;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      color: #64748b;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>접근 승인 관리</h1>
+        <p class="hint">체험 접근 요청을 확인하고 승인/거부를 처리합니다.</p>
+      </div>
+      <button class="btn" id="refreshBtn" type="button">새로고침</button>
+    </div>
+    <div id="list" class="list"></div>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = "axpay-access-requests";
+      const listEl = document.getElementById("list");
+      const refreshBtn = document.getElementById("refreshBtn");
+
+      function readRequests() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return [];
+          return parsed;
+        } catch {
+          return [];
+        }
+      }
+
+      function saveRequests(next) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      }
+
+      function fmtDate(ts) {
+        try {
+          return new Date(ts).toLocaleString("ko-KR");
+        } catch {
+          return "-";
+        }
+      }
+
+      function statusText(status) {
+        if (status === "approved") return "승인됨";
+        if (status === "rejected") return "거부됨";
+        return "승인 대기";
+      }
+
+      function render() {
+        const requests = readRequests();
+        if (requests.length === 0) {
+          listEl.innerHTML = '<div class="empty">요청 내역이 없습니다.</div>';
+          return;
+        }
+
+        listEl.innerHTML = "";
+        requests.forEach((req) => {
+          const item = document.createElement("article");
+          item.className = "item";
+          const stateClass = req.status === "approved" ? "approved" : req.status === "rejected" ? "rejected" : "pending";
+          item.innerHTML = `
+            <p class="name">${escapeHtml(req.siteName || "-")}</p>
+            <p class="url">${escapeHtml(req.siteUrl || "-")}</p>
+            <p class="meta">요청시간: ${escapeHtml(fmtDate(req.createdAt))}</p>
+            <span class="state ${stateClass}">${statusText(req.status)}</span>
+          `;
+
+          if (req.status === "pending") {
+            const row = document.createElement("div");
+            row.className = "row";
+
+            const approveBtn = document.createElement("button");
+            approveBtn.type = "button";
+            approveBtn.className = "btn approve";
+            approveBtn.textContent = "승인";
+            approveBtn.addEventListener("click", () => {
+              const next = readRequests().map((x) => (x.id === req.id ? { ...x, status: "approved" } : x));
+              saveRequests(next);
+              render();
+            });
+
+            const rejectBtn = document.createElement("button");
+            rejectBtn.type = "button";
+            rejectBtn.className = "btn reject";
+            rejectBtn.textContent = "거부";
+            rejectBtn.addEventListener("click", () => {
+              const next = readRequests().map((x) => (x.id === req.id ? { ...x, status: "rejected" } : x));
+              saveRequests(next);
+              render();
+            });
+
+            row.appendChild(approveBtn);
+            row.appendChild(rejectBtn);
+            item.appendChild(row);
+          }
+
+          listEl.appendChild(item);
+        });
+      }
+
+      function escapeHtml(value) {
+        const div = document.createElement("div");
+        div.textContent = String(value ?? "");
+        return div.innerHTML;
+      }
+
+      refreshBtn.addEventListener("click", render);
+      window.addEventListener("storage", (event) => {
+        if (event.key === STORAGE_KEY) render();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
