@@ -591,8 +591,8 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       {/* Footer */}
       <footer className="border-t border-slate-700/50 py-12 px-6 sm:px-8 lg:px-12 overflow-x-hidden">
         <div className="w-full max-w-6xl mx-auto min-w-0 flex items-center justify-center">
-          <span className="font-copyright text-white text-sm sm:text-base text-center inline-block origin-center transition-transform duration-300 ease-out select-none hover:scale-105">
-            Copyright 2026 All rights reserved AxPay
+          <span className="font-copyright text-white text-sm sm:text-base text-center inline-block origin-center transition-transform duration-300 ease-out select-none hover:scale-105 max-w-full px-2 break-words">
+            Copyright 2026 All rights reserved AxPay · v{__APP_VERSION__}
           </span>
         </div>
       </footer>
