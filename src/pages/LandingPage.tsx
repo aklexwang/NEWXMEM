@@ -46,9 +46,11 @@ const FlowStep = ({
         />
       )}
     </div>
-    <div className="flex-1 min-w-0 pb-10 sm:pb-12 transition-transform duration-300 origin-left group-hover/step:scale-[2] overflow-hidden">
-      <h3 className="text-slate-100 font-display font-semibold text-xl sm:text-2xl mb-3">{title}</h3>
-      <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
+    <div className="flex-1 min-w-0 pb-10 sm:pb-12">
+      <h3 className="text-slate-100 font-display font-semibold text-xl sm:text-2xl mb-3 origin-left transition-transform duration-300 group-hover/step:scale-110">
+        {title}
+      </h3>
+      <p className="text-slate-400 text-base sm:text-lg leading-relaxed transition-[color,font-weight] duration-300 group-hover/step:text-slate-200 group-hover/step:font-medium break-words">
         {desc}
         {descLine2 != null && <><br />{descLine2}</>}
       </p>
@@ -61,13 +63,17 @@ const FeatureCard = ({
   title,
   description,
   detail,
+  className = '',
 }: {
   icon: ReactNode;
   title: string;
   description: string;
   detail?: string;
+  className?: string;
 }) => (
-  <div className="group relative rounded-2xl bg-slate-800/60 border border-slate-600/40 p-8 sm:p-10 lg:p-12 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/5">
+  <div
+    className={`group relative rounded-2xl bg-slate-800/60 border border-slate-600/40 p-8 sm:p-10 lg:p-12 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/5 ${className}`.trim()}
+  >
     <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-6 group-hover:bg-cyan-500/15 transition-colors">
       {icon}
     </div>
@@ -269,7 +275,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       <section className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden">
         <div className="absolute inset-0 bg-slate-950/50" />
         <div className="relative z-10 w-full max-w-6xl mx-auto min-w-0 px-2">
-          <SectionTitle sub="About">AXPAY이란</SectionTitle>
+          <SectionTitle sub="About">AXPAY는 무엇인가?</SectionTitle>
           <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-center justify-center">
             <div
               className="flex-shrink-0 w-full lg:max-w-[28rem]"
@@ -395,7 +401,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       <section className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden">
         <div className="mesh-bg absolute inset-0 opacity-60" />
         <div className="relative z-10 w-full max-w-4xl mx-auto min-w-0 px-2">
-          <SectionTitle sub="Process">거래 흐름 한눈에</SectionTitle>
+          <SectionTitle sub="Process">솔루션 작동 메커니즘</SectionTitle>
           <div className="relative space-y-12 sm:space-y-16">
             <FlowStep
               step={1}
@@ -506,17 +512,19 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
               title="만원 단위 거래"
               description="거래 금액은 10,000원 이상 만원 단위만 허용됩니다. 판매자는 보유 포인트를 초과해 판매할 수 없고, 구매자는 금액 상한 없이 구매 신청이 가능합니다."
               detail="12,000원·10,500원 등은 입력 불가."
+              className="lg:col-start-1 lg:row-start-2"
             />
-            <FeatureCard
-              icon={
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              }
-              title="입금 사진 첨부"
-              description="설정에서 구매자·판매자 각각 입금 시 사진 첨부 사용 여부를 켜거나 끌 수 있습니다. 실제 서비스에서 입금 증빙으로 활용하는 옵션을 시뮬레이션합니다."
-              detail="현재는 체크박스로 옵션만 전달."
-            />
+            <div
+              className="flex items-center justify-center self-stretch overflow-hidden bg-transparent p-2 sm:p-3 lg:col-start-2 lg:row-start-2 lg:min-h-0 min-h-[200px] sm:min-h-[240px]"
+            >
+              <img
+                src={`${import.meta.env.BASE_URL}ai.gif`}
+                alt="AI 매칭"
+                className="h-auto w-full max-h-[min(40vh,280px)] max-w-[min(100%,380px)] object-contain [image-rendering:auto] [filter:drop-shadow(0_8px_28px_rgba(0,0,0,0.45))]"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
             <FeatureCard
               icon={
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -526,6 +534,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
               title="매칭 사운드"
               description="매칭이 성사되는 순간 사운드가 재생되어, 여러 건이 동시에 올라올 때도 사용자가 놓치지 않도록 합니다. 확인 단계에서 수락 시 사운드가 중지됩니다."
               detail="실제 서비스의 알림 경험을 반영."
+              className="lg:col-start-3 lg:row-start-2"
             />
           </div>
         </div>
@@ -540,10 +549,13 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
             {[
               { step: 1, title: '금액 입력', sub: '구매자·판매자 화면', icon: '💰' },
               { step: 2, title: 'AI 매칭', sub: '구매자·판매자 화면', icon: '🤝' },
-              { step: 3, title: '거래·확인', sub: '구매자·판매자 화면', icon: '✓' },
-              { step: 4, title: '완료', sub: '구매자·판매자 화면', icon: '✔' },
+              { step: 3, title: '거래·확인', sub: '구매자·판매자 화면', icon: '🧾' },
+              { step: 4, title: '완료', sub: '구매자·판매자 화면', icon: '🎉' },
             ].map(({ step, title, sub, icon }) => (
-              <div key={step} className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0 bg-slate-900/80 flex flex-col">
+              <div
+                key={step}
+                className="rounded-xl overflow-hidden border border-slate-600/40 shadow-lg ring-1 ring-cyan-500/20 min-w-0 bg-slate-900/80 flex flex-col origin-center transition-[transform,box-shadow] duration-300 ease-out hover:z-20 hover:scale-[1.04] hover:shadow-2xl hover:shadow-cyan-500/10 hover:ring-cyan-400/35"
+              >
                 <div className="flex-1 flex flex-col items-center justify-center min-h-[320px] sm:min-h-[400px] p-6 text-center">
                   <span className="text-5xl sm:text-6xl mb-4 opacity-90" aria-hidden>{icon}</span>
                   <p className="text-slate-300 font-display font-medium text-lg">{title}</p>
@@ -563,8 +575,8 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold text-slate-100 mb-6">
             직접 흐름을 체험해 보세요
           </h2>
-          <p className="text-slate-400 text-lg sm:text-xl mb-12 mx-auto leading-relaxed whitespace-nowrap overflow-x-auto">
-            판매자·구매자 화면을 나란히 두고, 매칭부터 완료까지 한 번에 확인할 수 있습니다.
+          <p className="text-slate-300 text-lg sm:text-xl font-bold mb-12 mx-auto leading-relaxed sm:whitespace-nowrap overflow-x-auto">
+            체험하기에서는 실제 AXPAY 솔루션을 체험할 수 있습니다.
           </p>
           <button
             type="button"
@@ -579,7 +591,9 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       {/* Footer */}
       <footer className="border-t border-slate-700/50 py-12 px-6 sm:px-8 lg:px-12 overflow-x-hidden">
         <div className="w-full max-w-6xl mx-auto min-w-0 flex items-center justify-center">
-          <span className="text-slate-500 text-base font-display text-center">AXPAY · P2P 매칭 솔루션</span>
+          <span className="font-copyright text-white text-sm sm:text-base text-center inline-block origin-center transition-transform duration-300 ease-out select-none hover:scale-105">
+            Copyright 2026 All rights reserved AxPay
+          </span>
         </div>
       </footer>
     </div>

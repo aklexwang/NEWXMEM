@@ -124,6 +124,41 @@ function createInitialBuyerSlot(index: number, config: SimConfig = DEFAULT_SIM_C
   };
 }
 
+/** 체험 모달 `사이트 주소`: http(s) URL만 허용 */
+function isValidHttpSiteUrl(value: string): boolean {
+  const s = value.trim();
+  if (!s) return false;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    if (!u.hostname) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 잘못된 형식일 때만 안내문구(빈 칸·올바른 URL이면 null) */
+function getHttpSiteUrlErrorMessage(value: string): string | null {
+  const s = value.trim();
+  if (s.length === 0) return null;
+  if (isValidHttpSiteUrl(s)) return null;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      return 'https:// 또는 http:// 로만 시작하는 주소만 입력할 수 있습니다. 예: https://example.com';
+    }
+    if (!u.hostname) {
+      return '도메인(예: example.com)이 포함되도록 전체 주소로 입력해 주세요.';
+    }
+  } catch {
+    if (!s.includes('://')) {
+      return 'https:// 또는 http:// 를 앞에 붙인 전체 주소로 입력해 주세요. (예: https://example.com)';
+    }
+  }
+  return '사이트 주소 형식이 올바르지 않습니다. 예: https://example.com/경로';
+}
+
 /**
  * 규칙: 상호 연동은 "매칭을 서로 확인하고 거래를 할 때"만 적용.
  * 그 외(매칭 미확인 모달, 타이머, 입력 등)는 구매자/판매자 각 회원별 독립 작동.
@@ -151,12 +186,15 @@ export default function App() {
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [siteNameInput, setSiteNameInput] = useState('');
   const [siteUrlInput, setSiteUrlInput] = useState('');
+  const [telegramIdInput, setTelegramIdInput] = useState('');
   const [accessStatus, setAccessStatus] = useState<'idle' | 'pending' | 'rejected'>('idle');
   const [currentAccessRequestId, setCurrentAccessRequestId] = useState<string | null>(null);
   type AccessRequest = {
     id: string;
     siteName: string;
     siteUrl: string;
+    /** 체험용 텔레그램 ID (빈 문자열 가능) */
+    telegramId: string;
     status: 'pending' | 'approved' | 'rejected';
     createdAt: number;
   };
@@ -164,8 +202,21 @@ export default function App() {
     try {
       const raw = localStorage.getItem(ACCESS_REQUESTS_STORAGE_KEY);
       if (!raw) return [];
-      const parsed = JSON.parse(raw) as AccessRequest[];
-      return Array.isArray(parsed) ? parsed : [];
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((item) => {
+        const r = item as Partial<AccessRequest>;
+        return {
+          ...r,
+          id: String(r.id ?? ''),
+          siteName: String(r.siteName ?? ''),
+          siteUrl: String(r.siteUrl ?? ''),
+          telegramId: typeof r.telegramId === 'string' ? r.telegramId : '',
+          status:
+            r.status === 'approved' || r.status === 'rejected' || r.status === 'pending' ? r.status : 'pending',
+          createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
+        } as AccessRequest;
+      });
     } catch {
       return [];
     }
@@ -180,8 +231,23 @@ export default function App() {
     const onStorage = (event: StorageEvent) => {
       if (event.key !== ACCESS_REQUESTS_STORAGE_KEY || !event.newValue) return;
       try {
-        const parsed = JSON.parse(event.newValue) as AccessRequest[];
-        if (Array.isArray(parsed)) setAccessRequests(parsed);
+        const parsed = JSON.parse(event.newValue) as unknown;
+        if (!Array.isArray(parsed)) return;
+        setAccessRequests(
+          parsed.map((item) => {
+            const r = item as Partial<AccessRequest>;
+            return {
+              ...r,
+              id: String(r.id ?? ''),
+              siteName: String(r.siteName ?? ''),
+              siteUrl: String(r.siteUrl ?? ''),
+              telegramId: typeof r.telegramId === 'string' ? r.telegramId : '',
+              status:
+                r.status === 'approved' || r.status === 'rejected' || r.status === 'pending' ? r.status : 'pending',
+              createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
+            } as AccessRequest;
+          })
+        );
       } catch {
         // ignore invalid storage payload
       }
@@ -1493,23 +1559,22 @@ export default function App() {
   if (!showSimulator) {
     const trimmedSiteName = siteNameInput.trim();
     const trimmedSiteUrl = siteUrlInput.trim();
-    const canSubmitAccess = trimmedSiteName.length > 0 && trimmedSiteUrl.length > 0;
+    const trimmedTelegramId = telegramIdInput.trim();
+    const siteUrlOk = isValidHttpSiteUrl(trimmedSiteUrl);
+    const canSubmitAccess = trimmedSiteName.length > 0 && siteUrlOk;
+    const siteUrlErrorMessage = getHttpSiteUrlErrorMessage(siteUrlInput);
+    const showSiteUrlError = siteUrlErrorMessage != null;
     return (
       <>
         <LandingPage
           onEnterSimulator={() => {
             setShowAccessModal(true);
             setAccessStatus('idle');
+            setTelegramIdInput('');
+            setSiteNameInput('');
+            setSiteUrlInput('');
           }}
         />
-        <a
-          href={`${import.meta.env.BASE_URL}access-admin.html`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed top-4 right-4 z-[110] h-10 px-4 rounded-xl border border-cyan-400/60 bg-slate-900/80 text-cyan-300 hover:bg-slate-800 transition-colors inline-flex items-center"
-        >
-          승인 관리
-        </a>
         {showAccessModal && (
           <div className="fixed inset-0 z-[120] flex items-center justify-center px-4 bg-slate-950/75 backdrop-blur-sm">
             <div className="w-full max-w-lg rounded-2xl border border-slate-600/60 bg-slate-900/95 shadow-2xl p-6 sm:p-7">
@@ -1536,12 +1601,44 @@ export default function App() {
                 <label className="block">
                   <span className="block text-slate-300 text-sm font-display mb-2">사이트 주소</span>
                   <input
+                    id="access-site-url"
                     type="text"
+                    inputMode="url"
+                    autoComplete="url"
                     value={siteUrlInput}
                     onChange={(e) => setSiteUrlInput(e.target.value)}
                     placeholder="예: https://example.com"
+                    className={`w-full h-11 rounded-xl border bg-slate-800/80 px-3 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 ${
+                      showSiteUrlError
+                        ? 'border-red-500/70 focus:ring-red-500/30 focus:border-red-500/60'
+                        : 'border-slate-600/60 focus:ring-cyan-500/40 focus:border-cyan-500/60'
+                    }`}
+                    disabled={accessStatus === 'pending'}
+                    aria-invalid={showSiteUrlError}
+                    aria-describedby={showSiteUrlError ? 'access-site-url-hint' : undefined}
+                  />
+                  {showSiteUrlError && siteUrlErrorMessage && (
+                    <div
+                      id="access-site-url-hint"
+                      className="mt-2 rounded-xl border border-amber-500/45 bg-amber-500/10 px-3.5 py-2.5"
+                      role="alert"
+                    >
+                      <p className="text-amber-200/95 text-sm font-medium font-display">입력 안내</p>
+                      <p className="text-amber-100/90 text-xs sm:text-sm leading-relaxed mt-1.5">{siteUrlErrorMessage}</p>
+                    </div>
+                  )}
+                </label>
+
+                <label className="block">
+                  <span className="block text-slate-300 text-sm font-display mb-2">텔레그램 ID</span>
+                  <input
+                    type="text"
+                    value={telegramIdInput}
+                    onChange={(e) => setTelegramIdInput(e.target.value)}
+                    placeholder="@username 또는 숫자 ID"
                     className="w-full h-11 rounded-xl border border-slate-600/60 bg-slate-800/80 px-3 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/60"
                     disabled={accessStatus === 'pending'}
+                    autoComplete="off"
                   />
                 </label>
 
@@ -1580,6 +1677,9 @@ export default function App() {
                     setShowAccessModal(false);
                     setAccessStatus('idle');
                     setCurrentAccessRequestId(null);
+                    setTelegramIdInput('');
+                    setSiteNameInput('');
+                    setSiteUrlInput('');
                   }}
                   className="h-10 px-4 rounded-xl border border-slate-600/70 text-slate-300 hover:text-slate-100 hover:border-slate-500 transition-colors"
                 >
@@ -1588,11 +1688,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
+                    if (!isValidHttpSiteUrl(trimmedSiteUrl)) return;
                     const now = Date.now();
                     const newRequest: AccessRequest = {
                       id: `req-${now}-${Math.random().toString(36).slice(2, 8)}`,
                       siteName: trimmedSiteName,
                       siteUrl: trimmedSiteUrl,
+                      telegramId: trimmedTelegramId,
                       status: 'pending',
                       createdAt: now,
                     };

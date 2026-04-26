@@ -16,16 +16,16 @@
       color: #e2e8f0;
     }
     .wrap {
-      max-width: 980px;
+      max-width: 1280px;
       margin: 0 auto;
-      padding: 24px 16px 36px;
+      padding: 24px 16px 40px;
     }
     .top {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
     h1 {
       margin: 0;
@@ -47,33 +47,125 @@
       cursor: pointer;
     }
     .btn:hover { background: #1e293b; }
-    .list {
-      display: grid;
-      gap: 10px;
-    }
-    .item {
+
+    /* 카드 + 표 (흰색 샘플과 동일한 구성, 색은 다크 유지) */
+    .panel {
       border: 1px solid #334155;
       border-radius: 12px;
-      background: rgba(15, 23, 42, 0.85);
-      padding: 14px;
+      background: rgba(15, 23, 42, 0.92);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.6);
+      overflow: hidden;
     }
-    .name { font-size: 16px; font-weight: 600; margin: 0; }
-    .url {
-      margin: 6px 0 0;
+    .panel-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #1e293b;
+      background: rgba(2, 6, 23, 0.45);
+    }
+    .panel-ico {
+      font-size: 20px;
+      line-height: 1;
+      user-select: none;
+    }
+    .panel-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
       font-size: 13px;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 12px 16px;
+      font-weight: 600;
       color: #94a3b8;
+      background: rgba(30, 41, 59, 0.5);
+      border-bottom: 1px solid #334155;
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 14px 16px;
+      vertical-align: middle;
+      border-bottom: 1px solid #1e293b;
+      color: #e2e8f0;
+    }
+    .data-table tbody tr:hover td {
+      background: rgba(30, 41, 59, 0.25);
+    }
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .cell-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #38bdf8;
       word-break: break-all;
     }
-    .meta {
-      margin: 8px 0 0;
-      font-size: 12px;
-      color: #64748b;
+    .cell-url {
+      color: #94a3b8;
+      max-width: 220px;
+      word-break: break-all;
     }
-    .row {
-      margin-top: 12px;
+    .cell-tg {
+      color: #7dd3fc;
+      max-width: 160px;
+      word-break: break-all;
+    }
+    .date-cell {
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .b-pending {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fcd34d;
+    }
+    .b-approved {
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+    }
+    .b-rejected {
+      background: rgba(244, 63, 94, 0.12);
+      color: #fda4af;
+    }
+    .b-ok {
+      background: rgba(16, 185, 129, 0.12);
+      color: #6ee7b7;
+    }
+    .b-bad {
+      background: rgba(244, 63, 94, 0.1);
+      color: #fda4af;
+    }
+    .b-muted {
+      color: #64748b;
+      background: rgba(100, 116, 139, 0.15);
+    }
+    .actions {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+    }
+    .btn-sm {
+      height: 32px;
+      padding: 0 12px;
+      font-size: 12px;
     }
     .approve {
       border: 1px solid #059669;
@@ -87,24 +179,11 @@
       color: #fff1f2;
     }
     .reject:hover { background: #9f1239; }
-    .state {
-      display: inline-flex;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      margin-top: 10px;
-    }
-    .pending { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-    .approved { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-    .rejected { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
     .empty {
-      border: 1px dashed #334155;
-      border-radius: 12px;
-      padding: 20px;
       text-align: center;
       color: #64748b;
       font-size: 14px;
+      padding: 48px 20px;
     }
   </style>
 </head>
@@ -117,7 +196,7 @@
       </div>
       <button class="btn" id="refreshBtn" type="button">새로고침</button>
     </div>
-    <div id="list" class="list"></div>
+    <div id="list"></div>
   </div>
 
   <script>
@@ -142,76 +221,120 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       }
 
-      function fmtDate(ts) {
+      /** YYYY-MM-DD HH:mm (24시간) */
+      function fmtDateTime24(ts) {
         try {
-          return new Date(ts).toLocaleString("ko-KR");
+          const d = new Date(ts);
+          if (Number.isNaN(d.getTime())) return "—";
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          const h = String(d.getHours()).padStart(2, "0");
+          const min = String(d.getMinutes()).padStart(2, "0");
+          return `${y}-${m}-${day} ${h}:${min}`;
         } catch {
-          return "-";
+          return "—";
         }
       }
 
-      function statusText(status) {
-        if (status === "approved") return "승인됨";
-        if (status === "rejected") return "거부됨";
-        return "승인 대기";
-      }
-
-      function render() {
-        const requests = readRequests();
-        if (requests.length === 0) {
-          listEl.innerHTML = '<div class="empty">요청 내역이 없습니다.</div>';
-          return;
-        }
-
-        listEl.innerHTML = "";
-        requests.forEach((req) => {
-          const item = document.createElement("article");
-          item.className = "item";
-          const stateClass = req.status === "approved" ? "approved" : req.status === "rejected" ? "rejected" : "pending";
-          item.innerHTML = `
-            <p class="name">${escapeHtml(req.siteName || "-")}</p>
-            <p class="url">${escapeHtml(req.siteUrl || "-")}</p>
-            <p class="meta">요청시간: ${escapeHtml(fmtDate(req.createdAt))}</p>
-            <span class="state ${stateClass}">${statusText(req.status)}</span>
-          `;
-
-          if (req.status === "pending") {
-            const row = document.createElement("div");
-            row.className = "row";
-
-            const approveBtn = document.createElement("button");
-            approveBtn.type = "button";
-            approveBtn.className = "btn approve";
-            approveBtn.textContent = "승인";
-            approveBtn.addEventListener("click", () => {
-              const next = readRequests().map((x) => (x.id === req.id ? { ...x, status: "approved" } : x));
-              saveRequests(next);
-              render();
-            });
-
-            const rejectBtn = document.createElement("button");
-            rejectBtn.type = "button";
-            rejectBtn.className = "btn reject";
-            rejectBtn.textContent = "거부";
-            rejectBtn.addEventListener("click", () => {
-              const next = readRequests().map((x) => (x.id === req.id ? { ...x, status: "rejected" } : x));
-              saveRequests(next);
-              render();
-            });
-
-            row.appendChild(approveBtn);
-            row.appendChild(rejectBtn);
-            item.appendChild(row);
-          }
-
-          listEl.appendChild(item);
-        });
+      function shortId(id) {
+        if (!id) return "—";
+        const s = String(id);
+        return s.length > 14 ? s.slice(0, 6) + "…" + s.slice(-5) : s;
       }
 
       function escapeHtml(value) {
         const div = document.createElement("div");
         div.textContent = String(value ?? "");
         return div.innerHTML;
+      }
+
+      function render() {
+        const requests = readRequests();
+        if (requests.length === 0) {
+          listEl.innerHTML = '<div class="panel"><div class="empty">요청 내역이 없습니다.</div></div>';
+          return;
+        }
+
+        const rows = requests
+          .map((req) => {
+            const stateClass =
+              req.status === "approved" ? "b-approved" : req.status === "rejected" ? "b-rejected" : "b-pending";
+            const statusLabel =
+              req.status === "approved" ? "승인" : req.status === "rejected" ? "거절" : "대기";
+            const accessClass =
+              req.status === "approved" ? "b-ok" : req.status === "rejected" ? "b-bad" : "b-muted";
+            const accessLabel = req.status === "approved" ? "정상" : req.status === "rejected" ? "불가" : "—";
+            const tg = (req.telegramId && String(req.telegramId).trim()) || "";
+
+            const idAttr = encodeURIComponent(String(req.id));
+            const actionCell =
+              req.status === "pending"
+                ? `<div class="actions" data-req-id="${idAttr}">
+                    <button type="button" class="btn btn-sm approve" data-approve>승인</button>
+                    <button type="button" class="btn btn-sm reject" data-reject>거부</button>
+                  </div>`
+                : `<span class="b-muted" style="padding:4px 8px; border-radius:6px; font-size:12px; color:#64748b">처리됨</span>`;
+
+            return `<tr>
+              <td class="cell-mono">${escapeHtml(shortId(req.id))}</td>
+              <td>${escapeHtml(req.siteName || "—")}</td>
+              <td class="cell-url">${escapeHtml(req.siteUrl || "—")}</td>
+              <td class="cell-tg">${tg ? escapeHtml(tg) : "—"}</td>
+              <td class="date-cell">${escapeHtml(fmtDateTime24(req.createdAt))}</td>
+              <td><span class="badge ${stateClass}">${statusLabel}</span></td>
+              <td><span class="badge ${accessClass}">${accessLabel}</span></td>
+              <td class="td-actions">${actionCell}</td>
+            </tr>`;
+          })
+          .join("");
+
+        listEl.innerHTML = `
+          <div class="panel">
+            <div class="panel-head">
+              <span class="panel-ico" title="">👤</span>
+              <h2 class="panel-title">접근 요청 목록</h2>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>요청 ID</th>
+                    <th>사이트 이름</th>
+                    <th>사이트 주소</th>
+                    <th>텔레그램</th>
+                    <th>신청 일시</th>
+                    <th>승인 상태</th>
+                    <th>접근</th>
+                    <th>처리</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        listEl.querySelectorAll("[data-req-id]").forEach((wrap) => {
+          const enc = wrap.getAttribute("data-req-id");
+          if (!enc) return;
+          let id;
+          try {
+            id = decodeURIComponent(enc);
+          } catch {
+            id = enc;
+          }
+          wrap.querySelector("[data-approve]")?.addEventListener("click", () => {
+            const next = readRequests().map((x) => (String(x.id) === id ? { ...x, status: "approved" } : x));
+            saveRequests(next);
+            render();
+          });
+          wrap.querySelector("[data-reject]")?.addEventListener("click", () => {
+            const next = readRequests().map((x) => (String(x.id) === id ? { ...x, status: "rejected" } : x));
+            saveRequests(next);
+            render();
+          });
+        });
       }
 
       refreshBtn.addEventListener("click", render);
