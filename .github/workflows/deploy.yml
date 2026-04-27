@@ -18,10 +18,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      # 로컬 `npm run dev` → http://localhost:5173/NEWXMEM/ 과 동일 base(`/NEWXMEM/`)로 빌드
+      # 커스텀 도메인 루트(https://axpay.site/)와 동일한 base('/')로 빌드
       - name: "Build (same as local: npm run build)"
         run: npm run build
-      - name: "Verify dist has /NEWXMEM/ (match localhost:5173/NEWXMEM/)"
+      - name: "Verify dist uses root base '/'"
         run: node ./scripts/verify-base.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
