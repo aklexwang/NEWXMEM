@@ -19,9 +19,9 @@ jobs:
           cache: 'npm'
       - run: npm ci
       # 로컬 `npm run dev` → http://localhost:5173/NEWXMEM/ 과 동일 base(`/NEWXMEM/`)로 빌드
-      - name: Build (same as local: npm run build)
+      - name: "Build (same as local: npm run build)"
         run: npm run build
-      - name: Verify dist has /NEWXMEM/ (match localhost:5173/NEWXMEM/)
+      - name: "Verify dist has /NEWXMEM/ (match localhost:5173/NEWXMEM/)"
         run: node ./scripts/verify-base.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
