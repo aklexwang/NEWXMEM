@@ -288,11 +288,11 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
               style={{
                 aspectRatio: '360 / 680',
                 background:
-                  'linear-gradient(135deg, #fafbfc 0%, #eef2f7 55%, #e2e8f0 100%)',
-                border: '1px solid rgba(255, 255, 255, 0.8)',
+                  'linear-gradient(180deg, rgba(2, 6, 23, 0.96) 0%, rgba(3, 7, 18, 0.98) 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.22)',
                 borderRadius: 48,
-                boxShadow: '0 40px 80px rgba(0, 0, 0, 0.35)',
-                color: '#1E293B',
+                boxShadow: '0 40px 80px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(15, 23, 42, 0.6)',
+                color: '#E2E8F0',
               }}
             >
               {/* 헤더: 폰 카드와 동일한 배지 스타일 */}
@@ -323,8 +323,8 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
                   style={{
                     fontSize: 11,
                     padding: '6px 12px',
-                    background: 'rgba(16, 185, 129, 0.12)',
-                    color: '#10B981',
+                    background: 'rgba(34, 211, 238, 0.14)',
+                    color: '#67E8F9',
                     borderRadius: 100,
                     fontWeight: 600,
                   }}
@@ -335,59 +335,59 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
 
               {/* 타이틀 + 본문: 카드 중앙으로 정렬 */}
               <div className="flex-1 flex flex-col items-center justify-center text-center px-2">
-                <p className="text-slate-500 text-[11px] tracking-[0.35em] font-semibold">
+                <p className="text-slate-400 text-[11px] tracking-[0.35em] font-semibold">
                   ABOUT PLATFORM
                 </p>
-                <h3 className="mt-3 text-slate-900 text-2xl sm:text-3xl font-bold leading-tight">
+                <h3 className="mt-3 text-slate-100 text-2xl sm:text-3xl font-bold leading-tight">
                   P2P 매칭을
                   <br />한 화면에서
                 </h3>
                 <span
                   className="block mt-5 h-[2px] w-10 rounded-full"
-                  style={{ background: '#10B981' }}
+                  style={{ background: '#22D3EE' }}
                 />
-                <div className="mt-5 text-slate-700 text-sm sm:text-base leading-relaxed space-y-4">
-                  <p>포인트를 <span className="text-emerald-600 font-semibold">판매</span>하려는 회원과</p>
-                  <p><span className="text-amber-600 font-semibold">구매</span>하려는 회원을</p>
+                <div className="mt-5 text-slate-300 text-sm sm:text-base leading-relaxed space-y-4">
+                  <p>포인트를 <span className="text-emerald-400 font-semibold">판매</span>하려는 회원과</p>
+                  <p><span className="text-amber-400 font-semibold">구매</span>하려는 회원을</p>
                   <p>AI 매칭으로 연결하고,</p>
                   <p>거래 단계별로</p>
-                  <p><span className="text-slate-900 font-semibold">확인 · 입금 · 입금확인</span>을</p>
+                  <p><span className="text-slate-100 font-semibold">확인 · 입금 · 입금확인</span>을</p>
                   <p>진행합니다.</p>
                 </div>
               </div>
 
               {/* 포인트 리스트 — 하단을 채우는 3줄 */}
-              <div className="mt-auto pt-6 space-y-3 border-t border-slate-300/60">
+              <div className="mt-auto pt-6 space-y-3 border-t border-slate-700/70">
                 <div className="flex items-start gap-3">
                   <span
                     className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
-                    style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669' }}
+                    style={{ background: 'rgba(34, 211, 238, 0.2)', color: '#67E8F9' }}
                   >
                     01
                   </span>
-                  <span className="text-slate-700 text-sm leading-snug">
-                    실시간 <span className="font-semibold text-slate-900">AI 매칭</span> 엔진
+                  <span className="text-slate-300 text-sm leading-snug">
+                    실시간 <span className="font-semibold text-slate-100">AI 매칭</span> 엔진
                   </span>
                 </div>
                 <div className="flex items-start gap-3">
                   <span
                     className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
-                    style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669' }}
+                    style={{ background: 'rgba(34, 211, 238, 0.2)', color: '#67E8F9' }}
                   >
                     02
                   </span>
-                  <span className="text-slate-700 text-sm leading-snug">
+                  <span className="text-slate-300 text-sm leading-snug">
                     다중 구매자·판매자 시나리오 지원
                   </span>
                 </div>
                 <div className="flex items-start gap-3">
                   <span
                     className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold"
-                    style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669' }}
+                    style={{ background: 'rgba(34, 211, 238, 0.2)', color: '#67E8F9' }}
                   >
                     03
                   </span>
-                  <span className="text-slate-700 text-sm leading-snug">
+                  <span className="text-slate-300 text-sm leading-snug">
                     타이머·위반·분쟁 처리까지 완비
                   </span>
                 </div>
