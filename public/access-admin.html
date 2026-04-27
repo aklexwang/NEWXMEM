@@ -305,13 +305,13 @@
     .toast .toast-body .ln { display: block; }
     .toast .toast-body .ln + .ln { margin-top: 2px; opacity: 0.85; }
 
+    /* 처리 대기(pending) 행은 승인/거부 누를 때까지 호박색으로 계속 펄스 */
     .row-new td {
-      animation: rowFlash 1.8s ease-out 1;
+      animation: rowAttentionPulse 1.4s ease-in-out infinite;
     }
-    @keyframes rowFlash {
-      0%   { background: rgba(16, 185, 129, 0.38); }
-      40%  { background: rgba(16, 185, 129, 0.22); }
-      100% { background: transparent; }
+    @keyframes rowAttentionPulse {
+      0%, 100% { background-color: rgba(245, 158, 11, 0.05); }
+      50%      { background-color: rgba(245, 158, 11, 0.24); }
     }
 
     .btn-notif {
@@ -431,8 +431,6 @@
       const seenIds = new Set();
       /** 첫 렌더(로그인 직후) 는 무음 */
       let alertsArmed = false;
-      /** 다음 render 에서 .row-new 효과 줄 ID 들 */
-      let pendingHighlightIds = new Set();
 
       function isAuthed() {
         try {
@@ -629,14 +627,11 @@
         updateTitleAndBadge(pendingCount);
 
         if (alertsArmed && newPending.length > 0) {
-          pendingHighlightIds = new Set(newPending.map((r) => String(r.id)));
           newPending.forEach((req) => {
             showToast(req);
             fireDesktopNotification(req);
           });
           playBeep();
-        } else {
-          pendingHighlightIds = new Set();
         }
         alertsArmed = true;
       }
@@ -662,6 +657,7 @@
 
             const idAttr = encodeURIComponent(String(req.id));
             const rowIdAttr = escapeHtml(String(req.id));
+            const rowClass = req.status === "pending" ? "row-new" : "";
             const actionCell =
               req.status === "pending"
                 ? `<div class="actions" data-req-id="${idAttr}">
@@ -670,7 +666,7 @@
                   </div>`
                 : `<span class="b-muted" style="padding:4px 8px; border-radius:6px; font-size:12px; color:#64748b">처리됨</span>`;
 
-            return `<tr data-row-id="${rowIdAttr}">
+            return `<tr${rowClass ? ` class="${rowClass}"` : ""} data-row-id="${rowIdAttr}">
               <td class="cell-mono">${escapeHtml(shortId(req.id))}</td>
               <td>${escapeHtml(req.siteName || "—")}</td>
               <td class="cell-url">${escapeHtml(req.siteUrl || "—")}</td>
@@ -729,15 +725,6 @@
             render();
           });
         });
-
-        if (pendingHighlightIds.size > 0) {
-          pendingHighlightIds.forEach((id) => {
-            const sel = '[data-row-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"')) + '"]';
-            const row = listEl.querySelector(sel);
-            if (row) row.classList.add("row-new");
-          });
-          pendingHighlightIds = new Set();
-        }
       }
 
       if (loginForm) {
