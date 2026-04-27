@@ -259,6 +259,106 @@
       font-size: 13px;
     }
     .login-err.show { display: block; }
+
+    /* === 신규: 알림(토스트/뱃지/하이라이트/알림버튼) === */
+    .toast-stack {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+      max-width: calc(100vw - 32px);
+    }
+    .toast {
+      min-width: 280px;
+      max-width: 360px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(56, 189, 248, 0.16));
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      box-shadow: 0 10px 28px rgba(16, 185, 129, 0.22), 0 2px 8px rgba(0, 0, 0, 0.45);
+      color: #ecfdf5;
+      font-size: 13px;
+      line-height: 1.45;
+      pointer-events: auto;
+      transform: translateX(120%);
+      opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s;
+    }
+    .toast.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    .toast .toast-title {
+      font-weight: 700;
+      color: #6ee7b7;
+      margin-bottom: 4px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toast .toast-body { color: #d1fae5; font-size: 12px; word-break: break-all; }
+    .toast .toast-body .ln { display: block; }
+    .toast .toast-body .ln + .ln { margin-top: 2px; opacity: 0.85; }
+
+    .row-new td {
+      animation: rowFlash 1.8s ease-out 1;
+    }
+    @keyframes rowFlash {
+      0%   { background: rgba(16, 185, 129, 0.38); }
+      40%  { background: rgba(16, 185, 129, 0.22); }
+      100% { background: transparent; }
+    }
+
+    .btn-notif {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #cbd5e1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-notif:hover { background: #1e293b; }
+    .btn-notif.on {
+      border-color: #059669;
+      color: #6ee7b7;
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .btn-notif:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .pending-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, 0.18);
+      color: #fcd34d;
+      font-size: 12px;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+    .pending-badge.zero { display: none; }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #fbbf24;
+      box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7);
+      animation: pulseDot 1.6s infinite;
+    }
+    @keyframes pulseDot {
+      0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); }
+      70%  { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+    }
   </style>
 </head>
 <body>
@@ -285,16 +385,25 @@
   <div class="wrap" id="adminApp" hidden>
     <div class="top">
       <div>
-        <h1>접근 승인 관리</h1>
+        <h1>
+          접근 승인 관리
+          <span id="pendingBadge" class="pending-badge zero" aria-live="polite">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <span id="pendingCountText">0</span> 대기
+          </span>
+        </h1>
         <p class="hint">체험 접근 요청을 확인하고 승인/거부를 처리합니다.</p>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <button class="btn-notif" id="notifBtn" type="button" title="새 요청이 오면 데스크톱 알림 표시">🔔 알림 켜기</button>
         <button class="btn" id="refreshBtn" type="button">새로고침</button>
         <button class="btn" id="logoutBtn" type="button">로그아웃</button>
       </div>
     </div>
     <div id="list"></div>
   </div>
+
+  <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
   <script>
     (function () {
@@ -312,6 +421,18 @@
       const logoutBtn = document.getElementById("logoutBtn");
       const listEl = document.getElementById("list");
       const refreshBtn = document.getElementById("refreshBtn");
+      const notifBtn = document.getElementById("notifBtn");
+      const toastStack = document.getElementById("toastStack");
+      const pendingBadge = document.getElementById("pendingBadge");
+      const pendingCountText = document.getElementById("pendingCountText");
+      const BASE_TITLE = "접근 승인 관리";
+
+      /** 이미 본 요청 ID — 새 요청만 알림 발사 */
+      const seenIds = new Set();
+      /** 첫 렌더(로그인 직후) 는 무음 */
+      let alertsArmed = false;
+      /** 다음 render 에서 .row-new 효과 줄 ID 들 */
+      let pendingHighlightIds = new Set();
 
       function isAuthed() {
         try {
@@ -395,8 +516,134 @@
         return div.innerHTML;
       }
 
+      /** 짧은 비프 (외부 파일 X · 사용자 제스처 후에만 안정 동작) */
+      function playBeep() {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          const ctx = new Ctx();
+          const tone = (freq, startOffset, dur) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            const t0 = ctx.currentTime + startOffset;
+            gain.gain.setValueAtTime(0.0001, t0);
+            gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+            osc.start(t0);
+            osc.stop(t0 + dur + 0.02);
+          };
+          tone(880, 0, 0.18);
+          tone(1320, 0.18, 0.22);
+          setTimeout(() => { try { ctx.close(); } catch { void 0; } }, 700);
+        } catch {
+          void 0;
+        }
+      }
+
+      /** 우측 상단 토스트 */
+      function showToast(req) {
+        if (!toastStack) return;
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.setAttribute("role", "status");
+        el.innerHTML =
+          '<div class="toast-title">🔔 새 체험 접근 요청</div>' +
+          '<div class="toast-body">' +
+          '<span class="ln"><strong>' + escapeHtml(req.siteName || "—") + "</strong></span>" +
+          '<span class="ln">' + escapeHtml(req.siteUrl || "—") + "</span>" +
+          (req.telegramId ? '<span class="ln">TG: ' + escapeHtml(req.telegramId) + "</span>" : "") +
+          "</div>";
+        toastStack.appendChild(el);
+        requestAnimationFrame(() => el.classList.add("show"));
+        const remove = () => {
+          el.classList.remove("show");
+          setTimeout(() => el.remove(), 400);
+        };
+        const t = setTimeout(remove, 6000);
+        el.addEventListener("click", () => {
+          clearTimeout(t);
+          remove();
+        });
+      }
+
+      /** OS 데스크톱 알림 (권한 받은 경우만) */
+      function fireDesktopNotification(req) {
+        if (!("Notification" in window)) return;
+        if (Notification.permission !== "granted") return;
+        try {
+          const n = new Notification("새 체험 접근 요청", {
+            body: (req.siteName || "—") + "\n" + (req.siteUrl || "—"),
+            tag: "axpay-access-" + req.id,
+            renotify: true,
+          });
+          n.onclick = () => {
+            window.focus();
+            n.close();
+          };
+        } catch {
+          void 0;
+        }
+      }
+
+      function refreshNotifBtn() {
+        if (!notifBtn) return;
+        if (!("Notification" in window)) {
+          notifBtn.textContent = "🔕 알림 미지원";
+          notifBtn.disabled = true;
+          notifBtn.classList.remove("on");
+          return;
+        }
+        if (Notification.permission === "granted") {
+          notifBtn.textContent = "🔔 알림 켜짐";
+          notifBtn.classList.add("on");
+        } else if (Notification.permission === "denied") {
+          notifBtn.textContent = "🔕 알림 차단됨";
+          notifBtn.classList.remove("on");
+        } else {
+          notifBtn.textContent = "🔔 알림 켜기";
+          notifBtn.classList.remove("on");
+        }
+      }
+
+      function updateTitleAndBadge(pendingCount) {
+        if (pendingCountText) pendingCountText.textContent = String(pendingCount);
+        if (pendingBadge) pendingBadge.classList.toggle("zero", pendingCount === 0);
+        document.title = pendingCount > 0 ? "(" + pendingCount + ") " + BASE_TITLE : BASE_TITLE;
+      }
+
+      /** 신규 pending 만 골라서 토스트·비프·데스크톱 알림 */
+      function detectAndAlert(requests) {
+        const newPending = [];
+        for (const r of requests) {
+          if (r.status === "pending" && !seenIds.has(String(r.id))) {
+            newPending.push(r);
+          }
+        }
+        for (const r of requests) seenIds.add(String(r.id));
+
+        const pendingCount = requests.filter((r) => r.status === "pending").length;
+        updateTitleAndBadge(pendingCount);
+
+        if (alertsArmed && newPending.length > 0) {
+          pendingHighlightIds = new Set(newPending.map((r) => String(r.id)));
+          newPending.forEach((req) => {
+            showToast(req);
+            fireDesktopNotification(req);
+          });
+          playBeep();
+        } else {
+          pendingHighlightIds = new Set();
+        }
+        alertsArmed = true;
+      }
+
       function render() {
         const requests = readRequests();
+        detectAndAlert(requests);
         if (requests.length === 0) {
           listEl.innerHTML = '<div class="panel"><div class="empty">요청 내역이 없습니다.</div></div>';
           return;
@@ -414,6 +661,7 @@
             const tg = (req.telegramId && String(req.telegramId).trim()) || "";
 
             const idAttr = encodeURIComponent(String(req.id));
+            const rowIdAttr = escapeHtml(String(req.id));
             const actionCell =
               req.status === "pending"
                 ? `<div class="actions" data-req-id="${idAttr}">
@@ -422,7 +670,7 @@
                   </div>`
                 : `<span class="b-muted" style="padding:4px 8px; border-radius:6px; font-size:12px; color:#64748b">처리됨</span>`;
 
-            return `<tr>
+            return `<tr data-row-id="${rowIdAttr}">
               <td class="cell-mono">${escapeHtml(shortId(req.id))}</td>
               <td>${escapeHtml(req.siteName || "—")}</td>
               <td class="cell-url">${escapeHtml(req.siteUrl || "—")}</td>
@@ -481,6 +729,15 @@
             render();
           });
         });
+
+        if (pendingHighlightIds.size > 0) {
+          pendingHighlightIds.forEach((id) => {
+            const sel = '[data-row-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"')) + '"]';
+            const row = listEl.querySelector(sel);
+            if (row) row.classList.add("row-new");
+          });
+          pendingHighlightIds = new Set();
+        }
       }
 
       if (loginForm) {
@@ -507,6 +764,32 @@
           if (isAuthed()) render();
         });
       }
+      if (notifBtn) {
+        notifBtn.addEventListener("click", function () {
+          if (!("Notification" in window)) {
+            refreshNotifBtn();
+            return;
+          }
+          if (Notification.permission === "default") {
+            Notification.requestPermission().then(refreshNotifBtn);
+          } else if (Notification.permission === "granted") {
+            try {
+              const n = new Notification("알림 테스트", {
+                body: "새 체험 접근 요청이 오면 이렇게 알립니다.",
+                tag: "axpay-access-test",
+              });
+              setTimeout(() => n.close(), 3000);
+            } catch {
+              void 0;
+            }
+            refreshNotifBtn();
+          } else {
+            refreshNotifBtn();
+          }
+        });
+      }
+      refreshNotifBtn();
+
       window.addEventListener("storage", (event) => {
         if (event.key === STORAGE_KEY && isAuthed()) render();
       });
