@@ -307,11 +307,23 @@
 
     /* 처리 대기(pending) 행은 승인/거부 누를 때까지 호박색으로 계속 펄스 */
     .row-new td {
-      animation: rowAttentionPulse 1.4s ease-in-out infinite;
+      animation: rowAttentionPulse 1.2s ease-in-out infinite;
+      position: relative;
+    }
+    .row-new td:first-child {
+      box-shadow: inset 4px 0 0 0 rgba(251, 191, 36, 0.95);
     }
     @keyframes rowAttentionPulse {
-      0%, 100% { background-color: rgba(245, 158, 11, 0.05); }
-      50%      { background-color: rgba(245, 158, 11, 0.24); }
+      0%, 100% { background-color: rgba(245, 158, 11, 0.10); }
+      50%      { background-color: rgba(245, 158, 11, 0.42); }
+    }
+    /* 대기 뱃지 자체도 살짝 호흡 */
+    .row-new .badge.b-pending {
+      animation: badgePulse 1.2s ease-in-out infinite;
+    }
+    @keyframes badgePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.0); transform: scale(1); }
+      50%      { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25); transform: scale(1.04); }
     }
 
     .btn-notif {
