@@ -406,31 +406,7 @@
   </style>
 </head>
 <body>
-  <!-- JS 없이도 먼저 보이는 것: 로그인(관리 화면은 hidden). 이전에 로그인된 경우만 sessionStorage로 건너뜀 -->
-  <div id="loginScreen" class="login-backdrop">
-    <div class="login-card">
-      <h2>관리자 로그인</h2>
-      <p class="sub">접근 승인 관리 — 허용된 계정만 입장</p>
-      <form id="loginForm" autocomplete="off">
-        <div class="field">
-          <label for="admId">아이디</label>
-          <input id="admId" name="username" type="text" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
-        </div>
-        <div class="field">
-          <label for="admPw">비밀번호</label>
-          <div class="pw-wrap">
-            <input id="admPw" name="password" type="password" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="padding-right:44px;" />
-            <button type="button" id="admPwEye" class="pw-eye" aria-label="비밀번호 보기" title="비밀번호 보기/숨기기">👁</button>
-          </div>
-          <div class="caps-warn" id="capsWarn" role="status">⚠ Caps Lock이 켜져 있어요</div>
-        </div>
-        <div class="login-err" id="loginErr" role="alert">아이디 또는 비밀번호가 올바르지 않습니다. (Caps Lock·자동완성·공백 확인)</div>
-        <button type="submit" class="login-btn">로그인</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="wrap" id="adminApp" hidden>
+  <div class="wrap" id="adminApp">
     <div class="top">
       <div>
         <h1>
@@ -445,7 +421,6 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
         <button class="btn-notif" id="notifBtn" type="button" title="새 요청이 오면 데스크톱 알림 표시">🔔 알림 켜기</button>
         <button class="btn" id="refreshBtn" type="button">새로고침</button>
-        <button class="btn" id="logoutBtn" type="button">로그아웃</button>
       </div>
     </div>
     <div id="list"></div>
@@ -455,20 +430,7 @@
 
   <script>
     (function () {
-      /** v2: 이전 세션 키 무효(로그인 먼저 강제) */
-      const AUTH_OK = "axpay_admin_ok_v2";
-      const ADM_ID = "admin";
-      const ADM_PW = "admin123";
       const STORAGE_KEY = "axpay-access-requests";
-      const loginScreen = document.getElementById("loginScreen");
-      const adminApp = document.getElementById("adminApp");
-      const loginForm = document.getElementById("loginForm");
-      const loginErr = document.getElementById("loginErr");
-      const admId = document.getElementById("admId");
-      const admPw = document.getElementById("admPw");
-      const admPwEye = document.getElementById("admPwEye");
-      const capsWarn = document.getElementById("capsWarn");
-      const logoutBtn = document.getElementById("logoutBtn");
       const listEl = document.getElementById("list");
       const refreshBtn = document.getElementById("refreshBtn");
       const notifBtn = document.getElementById("notifBtn");
@@ -479,7 +441,7 @@
 
       /** 이미 본 요청 ID — 새 요청만 알림 발사 */
       const seenIds = new Set();
-      /** 첫 렌더(로그인 직후) 는 무음 */
+      /** 첫 렌더(페이지 로드 직후) 는 무음 */
       let alertsArmed = false;
       /** 탭 제목 깜빡임 타이머 */
       let titleFlashTimer = null;
@@ -487,47 +449,6 @@
       let lastPendingCount = 0;
       /** 파비콘 상태 캐시 (동일 상태면 재생성 스킵) */
       let faviconAlertState = null;
-
-      function isAuthed() {
-        try {
-          return sessionStorage.getItem(AUTH_OK) === "1";
-        } catch {
-          return false;
-        }
-      }
-
-      function setAuthed() {
-        try {
-          sessionStorage.setItem(AUTH_OK, "1");
-        } catch {
-          void 0;
-        }
-      }
-
-      function clearAuth() {
-        try {
-          sessionStorage.removeItem(AUTH_OK);
-        } catch {
-          void 0;
-        }
-      }
-
-      function showMain() {
-        loginScreen.setAttribute("hidden", "");
-        adminApp.removeAttribute("hidden");
-      }
-
-      function showLogin() {
-        clearAuth();
-        adminApp.setAttribute("hidden", "");
-        loginScreen.removeAttribute("hidden");
-        loginErr.classList.remove("show");
-        if (admPw) admPw.value = "";
-        if (admId) admId.value = "";
-        stopTitleFlash();
-        document.title = BASE_TITLE;
-        setFaviconAlert(false);
-      }
 
       function readRequests() {
         try {
@@ -886,48 +807,9 @@
         });
       }
 
-      if (loginForm) {
-        loginForm.addEventListener("submit", function (e) {
-          e.preventDefault();
-          const id = (admId && admId.value.trim()) || "";
-          const pw = (admPw && admPw.value.trim()) || "";
-          if (id === ADM_ID && pw === ADM_PW) {
-            setAuthed();
-            showMain();
-            render();
-          } else {
-            loginErr.classList.add("show");
-          }
-        });
-      }
-      if (admPwEye && admPw) {
-        admPwEye.addEventListener("click", function () {
-          const wasPw = admPw.type === "password";
-          admPw.type = wasPw ? "text" : "password";
-          admPwEye.textContent = wasPw ? "🙈" : "👁";
-          admPw.focus();
-        });
-      }
-      function updateCapsWarn(e) {
-        if (!capsWarn) return;
-        const on = e && e.getModifierState && e.getModifierState("CapsLock");
-        capsWarn.classList.toggle("show", !!on);
-      }
-      if (admPw) {
-        admPw.addEventListener("keydown", updateCapsWarn);
-        admPw.addEventListener("keyup", updateCapsWarn);
-        admPw.addEventListener("blur", function () {
-          if (capsWarn) capsWarn.classList.remove("show");
-        });
-      }
-      if (logoutBtn) {
-        logoutBtn.addEventListener("click", function () {
-          showLogin();
-        });
-      }
       if (refreshBtn) {
         refreshBtn.addEventListener("click", function () {
-          if (isAuthed()) render();
+          render();
         });
       }
       if (notifBtn) {
@@ -957,15 +839,10 @@
       refreshNotifBtn();
 
       window.addEventListener("storage", (event) => {
-        if (event.key === STORAGE_KEY && isAuthed()) render();
+        if (event.key === STORAGE_KEY) render();
       });
 
-      if (isAuthed()) {
-        showMain();
-        render();
-      } else {
-        showLogin();
-      }
+      render();
     })();
   </script>
 </body>

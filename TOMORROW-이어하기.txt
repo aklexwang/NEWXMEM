@@ -16,8 +16,7 @@ NEWXMEM – 내일 이어서 하기
 4) 어드민 (접근 승인 관리)
    - /NEWXMEM/access-admin.html
    - 풀URL:  https://aklexwang.github.io/NEWXMEM/access-admin.html
-   - ID: admin  /  PW: admin123  (public/access-admin.html 하드코딩, 클라이언트만)
-   - 로그인 먼저(sessionStorage v2: axpay_admin_ok_v2)
+   - 로그인 없음 (URL 직링크 = 비공개 URL 자체가 게이트, 클라이언트사이드 가짜인증은 제거)
    - 배포/캐시:  Ctrl+Shift+R  또는 시크릿
 
 5) 자주 건드린 경로
