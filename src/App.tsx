@@ -9,6 +9,7 @@ import BuyerPhoneContent from './components/simulator/BuyerPhoneContent';
 import BuyerMultiSellerSimulator from './components/simulator/BuyerMultiSellerSimulator';
 import { playMatchSoundLoop, stopMatchSound } from './utils/matchSound';
 import LandingPage from './pages/LandingPage';
+import { createAccessRequest, getAccessRequestById } from './services/accessRequests';
 
 const MAX_BUYERS = 5;
 const MAX_SELLERS = 5;
@@ -165,7 +166,6 @@ function getHttpSiteUrlErrorMessage(value: string): string | null {
  */
 export default function App() {
   const MIN_POINT_AMOUNT = 10_000;
-  const ACCESS_REQUESTS_STORAGE_KEY = 'axpay-access-requests';
   /** 체험 승인 후 이동할 URL (관리자 승인 시) */
   const APPROVED_EXPERIENCE_URL = 'http://tg.xpaykr.com/?id=2041728433591128064';
   /** 만원 단위만 허용 (10,000 / 20,000 / 30,000 ...). 12,000원, 10,500원 등 불가 */
@@ -198,77 +198,31 @@ export default function App() {
     status: 'pending' | 'approved' | 'rejected';
     createdAt: number;
   };
-  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>(() => {
-    try {
-      const raw = localStorage.getItem(ACCESS_REQUESTS_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((item) => {
-        const r = item as Partial<AccessRequest>;
-        return {
-          ...r,
-          id: String(r.id ?? ''),
-          siteName: String(r.siteName ?? ''),
-          siteUrl: String(r.siteUrl ?? ''),
-          telegramId: typeof r.telegramId === 'string' ? r.telegramId : '',
-          status:
-            r.status === 'approved' || r.status === 'rejected' || r.status === 'pending' ? r.status : 'pending',
-          createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
-        } as AccessRequest;
-      });
-    } catch {
-      return [];
-    }
-  });
-
-  const saveAccessRequests = useCallback((next: AccessRequest[]) => {
-    setAccessRequests(next);
-    localStorage.setItem(ACCESS_REQUESTS_STORAGE_KEY, JSON.stringify(next));
-  }, []);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== ACCESS_REQUESTS_STORAGE_KEY || !event.newValue) return;
-      try {
-        const parsed = JSON.parse(event.newValue) as unknown;
-        if (!Array.isArray(parsed)) return;
-        setAccessRequests(
-          parsed.map((item) => {
-            const r = item as Partial<AccessRequest>;
-            return {
-              ...r,
-              id: String(r.id ?? ''),
-              siteName: String(r.siteName ?? ''),
-              siteUrl: String(r.siteUrl ?? ''),
-              telegramId: typeof r.telegramId === 'string' ? r.telegramId : '',
-              status:
-                r.status === 'approved' || r.status === 'rejected' || r.status === 'pending' ? r.status : 'pending',
-              createdAt: typeof r.createdAt === 'number' ? r.createdAt : 0,
-            } as AccessRequest;
-          })
-        );
-      } catch {
-        // ignore invalid storage payload
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
 
   useEffect(() => {
     if (!currentAccessRequestId) return;
-    const current = accessRequests.find((r) => r.id === currentAccessRequestId);
-    if (!current) return;
-    if (current.status === 'approved') {
-      setShowAccessModal(false);
-      window.location.assign(APPROVED_EXPERIENCE_URL);
-      return;
-    }
-    if (current.status === 'rejected') {
-      setAccessStatus('rejected');
-    }
-  }, [currentAccessRequestId, accessRequests]);
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const current = await getAccessRequestById(currentAccessRequestId);
+        if (!current || disposed) return;
+        if (current.status === 'approved') {
+          setShowAccessModal(false);
+          window.location.assign(APPROVED_EXPERIENCE_URL);
+          return;
+        }
+        if (current.status === 'rejected') setAccessStatus('rejected');
+      } catch {
+        // keep pending UI while transient network errors happen
+      }
+    };
+    void poll();
+    const id = window.setInterval(poll, 3000);
+    return () => {
+      disposed = true;
+      clearInterval(id);
+    };
+  }, [currentAccessRequestId]);
 
   /** 다중 동시 매칭 (판매자 1 · 구매자 N): 먼저 들어온 순 배분, 건별 독립 타이머/수락/거래 */
   const [scheduledMatches, setScheduledMatches] = useState<ScheduledMatch[]>([]);
@@ -1687,7 +1641,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!isValidHttpSiteUrl(trimmedSiteUrl)) return;
                     const now = Date.now();
                     const newRequest: AccessRequest = {
@@ -1698,9 +1652,14 @@ export default function App() {
                       status: 'pending',
                       createdAt: now,
                     };
-                    saveAccessRequests([newRequest, ...accessRequests].slice(0, 100));
-                    setCurrentAccessRequestId(newRequest.id);
-                    setAccessStatus('pending');
+                    try {
+                      await createAccessRequest(newRequest);
+                      setCurrentAccessRequestId(newRequest.id);
+                      setAccessStatus('pending');
+                    } catch (error) {
+                      console.error('[access-request] submit failed', error);
+                      window.alert('접근 요청 전송에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+                    }
                   }}
                   disabled={!canSubmitAccess || accessStatus === 'pending'}
                   className="h-10 px-4 rounded-xl bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

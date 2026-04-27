@@ -430,7 +430,8 @@
 
   <script>
     (function () {
-      const STORAGE_KEY = "axpay-access-requests";
+      const FIREBASE_CONFIG_URL = "./firebase-runtime-config.json";
+      let firebaseConfigPromise = null;
       const listEl = document.getElementById("list");
       const refreshBtn = document.getElementById("refreshBtn");
       const notifBtn = document.getElementById("notifBtn");
@@ -450,20 +451,74 @@
       /** 파비콘 상태 캐시 (동일 상태면 재생성 스킵) */
       let faviconAlertState = null;
 
-      function readRequests() {
+      function getFirebaseConfig() {
+        if (!firebaseConfigPromise) {
+          firebaseConfigPromise = fetch(FIREBASE_CONFIG_URL, { cache: "no-store" })
+            .then((res) => {
+              if (!res.ok) throw new Error("firebase-runtime-config.json 로드 실패");
+              return res.json();
+            })
+            .then((cfg) => {
+              const apiKey = String(cfg && cfg.apiKey ? cfg.apiKey : "").trim();
+              const projectId = String(cfg && cfg.projectId ? cfg.projectId : "").trim();
+              if (!apiKey || !projectId || apiKey.includes("REPLACE_WITH_") || projectId.includes("REPLACE_WITH_")) {
+                throw new Error("Firebase 설정(apiKey/projectId)이 비어 있습니다.");
+              }
+              return { apiKey, projectId };
+            });
+        }
+        return firebaseConfigPromise;
+      }
+
+      function toAccessRequest(doc) {
+        if (!doc || typeof doc !== "object" || typeof doc.name !== "string") return null;
+        const id = String(doc.name).split("/").pop();
+        if (!id) return null;
+        const f = doc.fields || {};
+        const statusRaw = f.status && typeof f.status.stringValue === "string" ? f.status.stringValue : "pending";
+        const status = statusRaw === "approved" || statusRaw === "rejected" || statusRaw === "pending" ? statusRaw : "pending";
+        const createdAtRaw = f.createdAt && f.createdAt.integerValue != null ? Number(f.createdAt.integerValue) : 0;
+        return {
+          id: String(id),
+          siteName: String((f.siteName && f.siteName.stringValue) || ""),
+          siteUrl: String((f.siteUrl && f.siteUrl.stringValue) || ""),
+          telegramId: String((f.telegramId && f.telegramId.stringValue) || ""),
+          status: status,
+          createdAt: Number.isFinite(createdAtRaw) ? createdAtRaw : 0,
+        };
+      }
+
+      async function readRequests() {
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (!raw) return [];
-          const parsed = JSON.parse(raw);
-          if (!Array.isArray(parsed)) return [];
-          return parsed;
+          const cfg = await getFirebaseConfig();
+          const base = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(cfg.projectId) + "/databases/(default)/documents";
+          const url = base + "/accessRequests?pageSize=100&orderBy=createdAt%20desc&key=" + encodeURIComponent(cfg.apiKey);
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) return [];
+          const json = await res.json();
+          const docs = Array.isArray(json.documents) ? json.documents : [];
+          return docs.map(toAccessRequest).filter(Boolean);
         } catch {
           return [];
         }
       }
 
-      function saveRequests(next) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      async function updateRequestStatus(id, status) {
+        const cfg = await getFirebaseConfig();
+        const base = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(cfg.projectId) + "/databases/(default)/documents";
+        const url =
+          base +
+          "/accessRequests/" +
+          encodeURIComponent(id) +
+          "?updateMask.fieldPaths=status&key=" +
+          encodeURIComponent(cfg.apiKey);
+        const body = { fields: { status: { stringValue: status } } };
+        const res = await fetch(url, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error("status update failed: " + res.status);
       }
 
       /** YYYY-MM-DD HH:mm (24시간) */
@@ -716,8 +771,8 @@
         alertsArmed = true;
       }
 
-      function render() {
-        const requests = readRequests();
+      async function render() {
+        const requests = await readRequests();
         detectAndAlert(requests);
         if (requests.length === 0) {
           listEl.innerHTML = '<div class="panel"><div class="empty">요청 내역이 없습니다.</div></div>';
@@ -795,21 +850,21 @@
             id = enc;
           }
           wrap.querySelector("[data-approve]")?.addEventListener("click", () => {
-            const next = readRequests().map((x) => (String(x.id) === id ? { ...x, status: "approved" } : x));
-            saveRequests(next);
-            render();
+            updateRequestStatus(id, "approved")
+              .then(() => render())
+              .catch(() => window.alert("승인 처리에 실패했습니다. 잠시 후 다시 시도해 주세요."));
           });
           wrap.querySelector("[data-reject]")?.addEventListener("click", () => {
-            const next = readRequests().map((x) => (String(x.id) === id ? { ...x, status: "rejected" } : x));
-            saveRequests(next);
-            render();
+            updateRequestStatus(id, "rejected")
+              .then(() => render())
+              .catch(() => window.alert("거부 처리에 실패했습니다. 잠시 후 다시 시도해 주세요."));
           });
         });
       }
 
       if (refreshBtn) {
         refreshBtn.addEventListener("click", function () {
-          render();
+          void render();
         });
       }
       if (notifBtn) {
@@ -838,11 +893,11 @@
       }
       refreshNotifBtn();
 
-      window.addEventListener("storage", (event) => {
-        if (event.key === STORAGE_KEY) render();
-      });
+      window.setInterval(() => {
+        void render();
+      }, 3000);
 
-      render();
+      void render();
     })();
   </script>
 </body>
