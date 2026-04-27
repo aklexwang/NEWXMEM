@@ -29,4 +29,42 @@ NEWXMEM – 내일 이어서 하기
 6) 내일 AI에게 할 말 예시
    "D:\home\NEWXMEM 프로젝트 이어감. TOMORROW-이어하기.txt 봤어."
 
+==============================
+[ 진행중: 커스텀 도메인 (is-a.dev 무료) ]
+==============================
+
+목적
+   - https://aklexwang.github.io/NEWXMEM/  → URL 에서 GitHub 사용자명(aklexwang) 가리기
+   - 무료 서브도메인 .is-a.dev 사용 (개인/비상업 프로젝트만 허용)
+
+진행 상황 체크리스트
+   [x] is-a-dev/register fork 완료 → https://github.com/aklexwang/axpay
+   [ ] 서브도메인 이름 결정 (사용자 보류)
+       후보:  aklx / xmem / aklexwang / newxmem
+       금지:  axpay  (← pay 가 들어가면 상업적이라 거절 위험 큼.
+              fork 이름이 axpay 인 건 OK, 서브도메인 이름만 다르게)
+   [ ] 이메일 결정 (PR owner.email, 공개 노출됨)
+   [ ] 사용자가 fork 레포(aklexwang/axpay)의 domains/<이름>.json 추가
+         {
+           "owner":   { "username": "aklexwang", "email": "<이메일>" },
+           "records": { "CNAME": "aklexwang.github.io" }
+         }
+       ※ CNAME 값은 레포명(NEWXMEM) 빼고 aklexwang.github.io 만!
+   [ ] 본 레포(is-a-dev/register)로 PR 제출
+   [ ] 머지 대기 (보통 수시간~1~2일)
+   [ ] 머지 후: DNS 자동 등록 (수분~24h 전파)
+   [ ] AI 가 처리할 후속작업:
+        - public/CNAME 파일에 <이름>.is-a.dev 한 줄 추가
+        - 커밋·푸시 → dist 에 CNAME 박힘 확인
+        - GitHub Settings → Pages → Custom domain 에 <이름>.is-a.dev 입력
+        - DNS check 통과 후 "Enforce HTTPS" 체크
+        - (선택) vite.config.ts base 를 "/" 로 바꿔 루트 서빙
+            ① 루트 옵션:  https://<이름>.is-a.dev/access-admin.html  ← 깔끔
+            ② 그대로:     https://<이름>.is-a.dev/NEWXMEM/access-admin.html
+   [ ] 라이브 검증
+
+복귀 시 트리거
+   사용자가 "도메인 변경" 이라고 말하면 위 체크리스트 이어서 시작.
+   먼저 [서브도메인 이름] 과 [이메일] 부터 받기.
+
 (이 파일은 메모용—원하면 지워도 됨. 코드 이력은 git log)
