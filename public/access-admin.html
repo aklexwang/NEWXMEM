@@ -260,6 +260,38 @@
     }
     .login-err.show { display: block; }
 
+    /* 비번 보기 토글 + Caps Lock 경고 */
+    .pw-wrap { position: relative; }
+    .pw-eye {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pw-eye:hover { background: rgba(56, 189, 248, 0.12); color: #38bdf8; }
+    .caps-warn {
+      display: none;
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(245, 158, 11, 0.12);
+      color: #fcd34d;
+      font-size: 12px;
+    }
+    .caps-warn.show { display: block; }
+
     /* === 신규: 알림(토스트/뱃지/하이라이트/알림버튼) === */
     .toast-stack {
       position: fixed;
@@ -382,13 +414,17 @@
       <form id="loginForm" autocomplete="off">
         <div class="field">
           <label for="admId">아이디</label>
-          <input id="admId" name="username" type="text" required autocomplete="username" />
+          <input id="admId" name="username" type="text" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
         </div>
         <div class="field">
           <label for="admPw">비밀번호</label>
-          <input id="admPw" name="password" type="password" required autocomplete="current-password" />
+          <div class="pw-wrap">
+            <input id="admPw" name="password" type="password" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="padding-right:44px;" />
+            <button type="button" id="admPwEye" class="pw-eye" aria-label="비밀번호 보기" title="비밀번호 보기/숨기기">👁</button>
+          </div>
+          <div class="caps-warn" id="capsWarn" role="status">⚠ Caps Lock이 켜져 있어요</div>
         </div>
-        <div class="login-err" id="loginErr" role="alert">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+        <div class="login-err" id="loginErr" role="alert">아이디 또는 비밀번호가 올바르지 않습니다. (Caps Lock·자동완성·공백 확인)</div>
         <button type="submit" class="login-btn">로그인</button>
       </form>
     </div>
@@ -430,6 +466,8 @@
       const loginErr = document.getElementById("loginErr");
       const admId = document.getElementById("admId");
       const admPw = document.getElementById("admPw");
+      const admPwEye = document.getElementById("admPwEye");
+      const capsWarn = document.getElementById("capsWarn");
       const logoutBtn = document.getElementById("logoutBtn");
       const listEl = document.getElementById("list");
       const refreshBtn = document.getElementById("refreshBtn");
@@ -852,7 +890,7 @@
         loginForm.addEventListener("submit", function (e) {
           e.preventDefault();
           const id = (admId && admId.value.trim()) || "";
-          const pw = (admPw && admPw.value) || "";
+          const pw = (admPw && admPw.value.trim()) || "";
           if (id === ADM_ID && pw === ADM_PW) {
             setAuthed();
             showMain();
@@ -860,6 +898,26 @@
           } else {
             loginErr.classList.add("show");
           }
+        });
+      }
+      if (admPwEye && admPw) {
+        admPwEye.addEventListener("click", function () {
+          const wasPw = admPw.type === "password";
+          admPw.type = wasPw ? "text" : "password";
+          admPwEye.textContent = wasPw ? "🙈" : "👁";
+          admPw.focus();
+        });
+      }
+      function updateCapsWarn(e) {
+        if (!capsWarn) return;
+        const on = e && e.getModifierState && e.getModifierState("CapsLock");
+        capsWarn.classList.toggle("show", !!on);
+      }
+      if (admPw) {
+        admPw.addEventListener("keydown", updateCapsWarn);
+        admPw.addEventListener("keyup", updateCapsWarn);
+        admPw.addEventListener("blur", function () {
+          if (capsWarn) capsWarn.classList.remove("show");
         });
       }
       if (logoutBtn) {
