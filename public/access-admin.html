@@ -443,6 +443,12 @@
       const seenIds = new Set();
       /** 첫 렌더(로그인 직후) 는 무음 */
       let alertsArmed = false;
+      /** 탭 제목 깜빡임 타이머 */
+      let titleFlashTimer = null;
+      /** 마지막으로 측정된 pending 개수 — visibilitychange 에서 사용 */
+      let lastPendingCount = 0;
+      /** 파비콘 상태 캐시 (동일 상태면 재생성 스킵) */
+      let faviconAlertState = null;
 
       function isAuthed() {
         try {
@@ -480,6 +486,9 @@
         loginErr.classList.remove("show");
         if (admPw) admPw.value = "";
         if (admId) admId.value = "";
+        stopTitleFlash();
+        document.title = BASE_TITLE;
+        setFaviconAlert(false);
       }
 
       function readRequests() {
@@ -526,13 +535,14 @@
         return div.innerHTML;
       }
 
-      /** 짧은 비프 (외부 파일 X · 사용자 제스처 후에만 안정 동작) */
+      /** 4음 도어벨 (외부 파일 X · 사용자 제스처 후 안정 동작) */
       function playBeep() {
         try {
           const Ctx = window.AudioContext || window.webkitAudioContext;
           if (!Ctx) return;
           const ctx = new Ctx();
-          const tone = (freq, startOffset, dur) => {
+          const tone = (freq, startOffset, dur, vol) => {
+            const v = typeof vol === "number" ? vol : 0.24;
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
@@ -541,18 +551,114 @@
             osc.frequency.value = freq;
             const t0 = ctx.currentTime + startOffset;
             gain.gain.setValueAtTime(0.0001, t0);
-            gain.gain.exponentialRampToValueAtTime(0.18, t0 + 0.03);
+            gain.gain.exponentialRampToValueAtTime(v, t0 + 0.025);
             gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
             osc.start(t0);
             osc.stop(t0 + dur + 0.02);
           };
-          tone(880, 0, 0.18);
-          tone(1320, 0.18, 0.22);
-          setTimeout(() => { try { ctx.close(); } catch { void 0; } }, 700);
+          // 도-미-솔-도(높은) 상승 도어벨
+          tone(523, 0.00, 0.16);
+          tone(659, 0.16, 0.16);
+          tone(784, 0.32, 0.18);
+          tone(1047, 0.50, 0.32, 0.30);
+          setTimeout(() => { try { ctx.close(); } catch { void 0; } }, 1100);
         } catch {
           void 0;
         }
       }
+
+      /** 캔버스로 파비콘 동적 생성 (빨간 점 = 미처리 알림) */
+      function setFaviconAlert(hasAlert) {
+        if (faviconAlertState === hasAlert) return;
+        faviconAlertState = hasAlert;
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 32;
+          canvas.height = 32;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          // 라운드 사각형 배경
+          const r = 6;
+          ctx.fillStyle = "#0f172a";
+          ctx.beginPath();
+          ctx.moveTo(r, 0);
+          ctx.lineTo(32 - r, 0);
+          ctx.quadraticCurveTo(32, 0, 32, r);
+          ctx.lineTo(32, 32 - r);
+          ctx.quadraticCurveTo(32, 32, 32 - r, 32);
+          ctx.lineTo(r, 32);
+          ctx.quadraticCurveTo(0, 32, 0, 32 - r);
+          ctx.lineTo(0, r);
+          ctx.quadraticCurveTo(0, 0, r, 0);
+          ctx.closePath();
+          ctx.fill();
+          // A 글자
+          ctx.fillStyle = hasAlert ? "#fbbf24" : "#38bdf8";
+          ctx.font = "bold 22px -apple-system, Segoe UI, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("A", 16, 17);
+          // 빨간 알림 점
+          if (hasAlert) {
+            ctx.beginPath();
+            ctx.arc(24, 8, 7, 0, Math.PI * 2);
+            ctx.fillStyle = "#ef4444";
+            ctx.fill();
+            ctx.strokeStyle = "#0f172a";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+          let link = document.querySelector("link[rel~='icon']");
+          if (!link) {
+            link = document.createElement("link");
+            link.rel = "icon";
+            document.head.appendChild(link);
+          }
+          link.type = "image/png";
+          link.href = canvas.toDataURL("image/png");
+        } catch {
+          void 0;
+        }
+      }
+
+      /** 탭 제목 깜빡임 — 백그라운드 탭에서도 보이라고 */
+      function startTitleFlash(count) {
+        stopTitleFlash();
+        let alt = false;
+        const tick = () => {
+          document.title = alt
+            ? "🔔 새 요청 " + count + "건!"
+            : "(" + count + ") " + BASE_TITLE;
+          alt = !alt;
+        };
+        tick();
+        titleFlashTimer = window.setInterval(tick, 900);
+      }
+      function stopTitleFlash() {
+        if (titleFlashTimer != null) {
+          clearInterval(titleFlashTimer);
+          titleFlashTimer = null;
+        }
+      }
+      function applyTitleStrategy(count) {
+        if (count <= 0) {
+          stopTitleFlash();
+          document.title = BASE_TITLE;
+          return;
+        }
+        if (document.hidden) {
+          startTitleFlash(count);
+        } else {
+          stopTitleFlash();
+          document.title = "(" + count + ") " + BASE_TITLE;
+        }
+      }
+      document.addEventListener("visibilitychange", () => {
+        applyTitleStrategy(lastPendingCount);
+      });
+      window.addEventListener("focus", () => {
+        applyTitleStrategy(lastPendingCount);
+      });
 
       /** 우측 상단 토스트 */
       function showToast(req) {
@@ -580,7 +686,7 @@
         });
       }
 
-      /** OS 데스크톱 알림 (권한 받은 경우만) */
+      /** OS 데스크톱 알림 (권한 받은 경우만, 직접 닫을 때까지 유지) */
       function fireDesktopNotification(req) {
         if (!("Notification" in window)) return;
         if (Notification.permission !== "granted") return;
@@ -589,6 +695,7 @@
             body: (req.siteName || "—") + "\n" + (req.siteUrl || "—"),
             tag: "axpay-access-" + req.id,
             renotify: true,
+            requireInteraction: true,
           });
           n.onclick = () => {
             window.focus();
@@ -620,9 +727,11 @@
       }
 
       function updateTitleAndBadge(pendingCount) {
+        lastPendingCount = pendingCount;
         if (pendingCountText) pendingCountText.textContent = String(pendingCount);
         if (pendingBadge) pendingBadge.classList.toggle("zero", pendingCount === 0);
-        document.title = pendingCount > 0 ? "(" + pendingCount + ") " + BASE_TITLE : BASE_TITLE;
+        applyTitleStrategy(pendingCount);
+        setFaviconAlert(pendingCount > 0);
       }
 
       /** 신규 pending 만 골라서 토스트·비프·데스크톱 알림 */
