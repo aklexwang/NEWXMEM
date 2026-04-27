@@ -351,7 +351,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
                   <p><span className="text-amber-400 font-semibold">구매</span>하려는 회원을</p>
                   <p>AI 매칭으로 연결하고,</p>
                   <p>거래 단계별로</p>
-                  <p><span className="text-slate-100 font-semibold">확인 · 입금 · 입금확인</span>을</p>
+                  <p><span className="text-slate-100 font-semibold">거래 · 입금 · 입금확인</span>을</p>
                   <p>진행합니다.</p>
                 </div>
               </div>
