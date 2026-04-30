@@ -83,6 +83,35 @@ const FeatureCard = ({
   </div>
 );
 
+function openAxpayHowItWorksPage() {
+  window.location.href = `${import.meta.env.BASE_URL}axpay-how-it-works.html`;
+}
+
+function openNoInstallHowItWorksPage() {
+  window.location.href = `${import.meta.env.BASE_URL}axpay-no-install-how-it-works.html`;
+}
+
+/** 작동법: 시안 테두리·글래스 — 좌측 2카드 가로 동일(w-full + 부모 고정폭) */
+const howItWorksButtonClass =
+  'w-full text-center text-base sm:text-lg px-8 py-4 rounded-2xl font-display font-semibold border-2 border-cyan-400/70 text-cyan-100 bg-slate-950/55 backdrop-blur-sm shadow-[0_0_18px_rgba(34,211,238,0.2)] hover:bg-cyan-500/15 hover:border-cyan-300/85 hover:shadow-[0_0_26px_rgba(34,211,238,0.35)] transition-all';
+
+/** 무설치 버전 작동법: 에메랄드 테두리 (작동법·체험과 구분) */
+const noInstallHowItWorksButtonClass =
+  'w-full text-center text-base sm:text-lg px-8 py-4 rounded-2xl font-display font-semibold border-2 border-emerald-400/70 text-emerald-100 bg-slate-950/55 backdrop-blur-sm shadow-[0_0_18px_rgba(52,211,153,0.2)] hover:bg-emerald-500/15 hover:border-emerald-300/85 hover:shadow-[0_0_26px_rgba(52,211,153,0.35)] transition-all';
+
+/** 체험하기: 동일 글래스 느낌 + 테두리·글로우는 골드(기존 솔리드 색감). 왼쪽 2버튼 스택과 높이 맞춤용 stretch·중앙 정렬 */
+const trialButtonClass =
+  'inline-flex items-center justify-center self-stretch text-base sm:text-lg px-8 py-4 rounded-2xl font-display font-semibold border-2 border-amber-400/80 text-amber-100 bg-slate-950/55 backdrop-blur-sm shadow-[0_0_20px_rgba(251,191,36,0.28)] hover:bg-amber-500/15 hover:border-amber-300/90 hover:shadow-[0_0_30px_rgba(251,191,36,0.42)] transition-all w-full sm:w-auto sm:min-w-[200px]';
+
+const ctaTrialButtonClass =
+  'inline-flex items-center justify-center self-stretch text-lg sm:text-xl px-12 py-5 rounded-2xl font-display font-semibold border-2 border-amber-400/80 text-amber-100 bg-slate-900/65 backdrop-blur-sm shadow-[0_0_22px_rgba(251,191,36,0.3)] hover:bg-amber-500/15 hover:border-amber-300/90 hover:shadow-[0_0_32px_rgba(251,191,36,0.4)] transition-all w-full sm:w-auto sm:min-w-[220px]';
+
+const ctaHowItWorksButtonClass =
+  'w-full text-center text-lg sm:text-xl px-12 py-5 rounded-2xl font-display font-semibold border-2 border-cyan-400/70 text-cyan-100 bg-slate-900/65 backdrop-blur-sm shadow-[0_0_20px_rgba(34,211,238,0.22)] hover:bg-cyan-500/15 hover:border-cyan-300/85 hover:shadow-[0_0_28px_rgba(34,211,238,0.33)] transition-all';
+
+const ctaNoInstallHowItWorksButtonClass =
+  'w-full text-center text-lg sm:text-xl px-12 py-5 rounded-2xl font-display font-semibold border-2 border-emerald-400/70 text-emerald-100 bg-slate-900/65 backdrop-blur-sm shadow-[0_0_20px_rgba(52,211,153,0.22)] hover:bg-emerald-500/15 hover:border-emerald-300/85 hover:shadow-[0_0_28px_rgba(52,211,153,0.33)] transition-all';
+
 export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
   return (
     <div className="min-h-screen w-full overflow-x-hidden">
@@ -120,13 +149,19 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
             <br />
             매칭부터 입금·확인까지 한 화면에서 체험할 수 있는 시뮬레이터입니다.
           </p>
-          <button
-            type="button"
-            onClick={onEnterSimulator}
-            className="text-base sm:text-lg px-8 py-4 rounded-2xl font-display font-semibold bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 text-slate-900 shadow-[0_0_24px_rgba(251,191,36,0.4)] hover:shadow-[0_0_32px_rgba(251,191,36,0.5)] transition-shadow"
-          >
-            AXPAY 체험하기
-          </button>
+          <div className="flex flex-wrap items-stretch justify-center gap-4">
+            <div className="flex flex-col gap-3 w-full max-w-[320px] sm:w-[300px] sm:max-w-none items-stretch shrink-0">
+              <button type="button" onClick={openAxpayHowItWorksPage} className={howItWorksButtonClass}>
+                API 버전 작동법
+              </button>
+              <button type="button" onClick={openNoInstallHowItWorksPage} className={noInstallHowItWorksButtonClass}>
+                무설치 버전 작동법
+              </button>
+            </div>
+            <button type="button" onClick={onEnterSimulator} className={trialButtonClass}>
+              AXPAY 체험하기
+            </button>
+          </div>
         </div>
       </header>
 
@@ -541,7 +576,7 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
       </section>
 
       {/* 구매·판매 진행 모습 — CTA 위 (4단계 플로우 카드) */}
-      <section className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden">
+      <section id="axpay-how-it-works" className="relative py-24 sm:py-32 lg:py-40 px-6 sm:px-8 lg:px-12 overflow-hidden scroll-mt-24">
         <div className="absolute inset-0 bg-slate-950/50" />
         <div className="relative z-10 w-full max-w-7xl mx-auto min-w-0 px-2">
           <SectionTitle sub="Process">구매와 판매의 진행</SectionTitle>
@@ -578,13 +613,19 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
           <p className="text-slate-300 text-lg sm:text-xl font-bold mb-12 mx-auto leading-relaxed sm:whitespace-nowrap overflow-x-auto">
             체험하기에서는 실제 AXPAY 솔루션을 체험할 수 있습니다.
           </p>
-          <button
-            type="button"
-            onClick={onEnterSimulator}
-            className="btn-primary text-lg sm:text-xl px-12 py-5 rounded-2xl"
-          >
-            AXPAY 체험하기
-          </button>
+          <div className="flex flex-wrap items-stretch justify-center gap-4">
+            <div className="flex flex-col gap-3 w-full max-w-[360px] sm:w-[340px] sm:max-w-none items-stretch shrink-0">
+              <button type="button" onClick={openAxpayHowItWorksPage} className={ctaHowItWorksButtonClass}>
+                API 버전 작동법
+              </button>
+              <button type="button" onClick={openNoInstallHowItWorksPage} className={ctaNoInstallHowItWorksButtonClass}>
+                무설치 버전 작동법
+              </button>
+            </div>
+            <button type="button" onClick={onEnterSimulator} className={ctaTrialButtonClass}>
+              AXPAY 체험하기
+            </button>
+          </div>
         </div>
       </section>
 

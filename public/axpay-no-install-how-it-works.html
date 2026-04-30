@@ -1,0 +1,1454 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>무설치 버전 작동법 · AXPAY</title>
+  <style>
+    :root {
+      --bg: #07080b;
+      --panel: #111217;
+      --line: #2a2d36;
+      --line-gold: #6b5428;
+      --text: #f5f6f8;
+      --muted: #a7acb7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 50% -20%, rgba(215, 157, 46, 0.22), rgba(7, 8, 11, 0) 52%),
+        linear-gradient(180deg, #090a0f 0%, #06070a 100%);
+    }
+    .page {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 8px 8px 16px;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(180deg, #171208, #0f1015);
+      border: 1px solid #5a4520;
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .brand {
+      font-weight: 800;
+      letter-spacing: 0.07em;
+      color: #f8d998;
+    }
+    .quick {
+      display: flex;
+      gap: 12px;
+      color: #d9bf86;
+      white-space: nowrap;
+    }
+    .nav-gold {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 1px;
+      padding: 1px;
+      background: linear-gradient(180deg, #70551f, #2f2410);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .nav-gold span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 34px;
+      font-size: 12px;
+      color: #f1dbb0;
+      background: linear-gradient(180deg, #2a2418, #171a21);
+      transition: color 0.14s ease;
+      cursor: pointer;
+    }
+    .nav-gold span > b {
+      display: inline-block;
+      font-weight: 700;
+      transition: transform 0.14s ease;
+      transform-origin: center;
+    }
+    .nav-gold span:hover > b {
+      transform: scale(1.08);
+    }
+    .nav-gold span:hover {
+      color: #fff3d0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: clamp(185px, 15vw, 245px) minmax(0, 1fr) clamp(205px, 16vw, 270px);
+      gap: 8px;
+    }
+    .panel {
+      background: linear-gradient(180deg, #14161d, #0e1015);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .panel-head {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #f1d595;
+      border-bottom: 1px solid #2d3038;
+      background: linear-gradient(180deg, #302612, #1a1b21);
+    }
+    .left-section {
+      padding: 8px;
+    }
+    .left-quick {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+      margin-bottom: 6px;
+      background: linear-gradient(180deg, #7b5d23, #3b2d12);
+      border: 1px solid #7f6128;
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .left-quick button {
+      height: 34px;
+      border: 0;
+      border-radius: 7px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffd98f;
+      background: linear-gradient(180deg, #2d2a20, #161a22);
+      cursor: pointer;
+      transition: transform 0.16s ease, filter 0.16s ease;
+    }
+    .left-quick button:hover {
+      transform: scale(1.05);
+      filter: brightness(1.06);
+    }
+    .left-quick.demo-click {
+      filter: brightness(1.12);
+      box-shadow: inset 0 0 0 1px rgba(255, 217, 143, 0.35), 0 0 22px rgba(255, 194, 84, 0.28);
+    }
+    .left-quick button.demo-click {
+      transform: scale(1.08);
+      filter: brightness(1.14);
+      box-shadow: 0 0 0 1px rgba(255, 217, 143, 0.35), 0 0 18px rgba(255, 194, 84, 0.35);
+    }
+    .tap-hand {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 9999;
+      font-size: 140px;
+      line-height: 1;
+      pointer-events: none;
+      opacity: 0;
+      /* 위치는 JS에서 손끝 보정 — 기본은 중앙 기준 */
+      transform-origin: 50% 50%;
+      transform: translate(-50%, calc(-50% - 2cm)) scale(0.9);
+      /* left/top 은 전환 금지 — 첫 프레임에 (0,0)→목표 애니메이션 시 tip 보정이 미니게임 쪽으로 폭주함 */
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+    }
+    .tap-hand.show { opacity: 1; }
+    .tap-hand.tap { transform: translate(-50%, calc(-50% - 2cm)) scale(1.08); }
+    /* 확인 클릭 전까지 손 깜빡임 (버튼은 애니메이션 없음) */
+    @keyframes tap-hand-await-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.22;
+      }
+    }
+    .tap-hand.await-confirm.show {
+      transition: transform 0.2s ease;
+      animation: tap-hand-await-pulse 0.85s ease-in-out infinite;
+    }
+
+    /* 무설치: 5탭 후 로그인 모달 (데모) */
+    .ni-login-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10050;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(5, 8, 14, 0.72);
+      backdrop-filter: blur(6px);
+    }
+    .ni-login-overlay.open {
+      display: flex;
+    }
+    .ni-login-dialog {
+      width: 100%;
+      max-width: 380px;
+      border-radius: 12px;
+      border: 1px solid rgba(55, 65, 85, 0.85);
+      background: #1a1f2b;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      padding: 32px 28px 28px;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+    }
+    .ni-login-brand {
+      text-align: center;
+      margin-bottom: 28px;
+      user-select: none;
+      line-height: 1;
+    }
+    .ni-login-ax {
+      display: inline-block;
+      font-size: 2.15rem;
+      font-weight: 900;
+      letter-spacing: -0.06em;
+      background: linear-gradient(
+        165deg,
+        #f4f7fb 0%,
+        #c5ccd6 22%,
+        #8e96a3 48%,
+        #dfe4ec 72%,
+        #9aa3b0 100%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+      position: relative;
+    }
+    .ni-login-ax::after {
+      content: "";
+      position: absolute;
+      left: -8%;
+      top: 48%;
+      width: 116%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(45, 52, 65, 0.95), transparent);
+      transform: rotate(-50deg);
+      transform-origin: center;
+      pointer-events: none;
+      border-radius: 1px;
+    }
+    .ni-login-pay {
+      display: inline-block;
+      font-size: 2.15rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: #ffffff;
+      margin-left: 2px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .ni-login-field {
+      margin-bottom: 18px;
+    }
+    .ni-login-field label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 8px;
+    }
+    .ni-login-field input {
+      width: 100%;
+      height: 46px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid #3d4759;
+      background: #141821;
+      color: #e2e8f0;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .ni-login-field input::placeholder {
+      color: #64748b;
+    }
+    .ni-login-field input:focus {
+      border-color: #5b6a85;
+    }
+    .ni-login-submit {
+      width: 100%;
+      height: 48px;
+      margin-top: 6px;
+      border: none;
+      border-radius: 10px;
+      background: #34445c;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, filter 0.15s ease, background 0.15s ease;
+    }
+    .ni-login-submit:hover {
+      filter: brightness(1.08);
+      background: #3d4f6a;
+    }
+    .ni-login-footer {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .ni-login-footer a {
+      color: #38bdf8;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .ni-login-footer a:hover {
+      text-decoration: underline;
+    }
+    .ni-login-submit.ni-login-submit--demo {
+      transform: scale(0.96);
+      filter: brightness(1.12);
+    }
+
+    /* 5탭 후 → 손 아래 확인 버튼만 (애니메이션 없음) */
+    .ni-tap-confirm-wrap {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 10000;
+      display: none;
+      pointer-events: none;
+    }
+    .ni-tap-confirm-wrap.open {
+      display: block;
+    }
+    .ni-tap-confirm-btn {
+      pointer-events: auto;
+      min-width: 120px;
+      height: 42px;
+      padding: 0 22px;
+      border-radius: 10px;
+      border: 1px solid #b78a33;
+      background: linear-gradient(180deg, #f8d57d, #d7a339);
+      color: #1c1409;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      transition: filter 0.15s ease, transform 0.12s ease;
+    }
+    .ni-tap-confirm-btn:hover {
+      filter: brightness(1.06);
+    }
+    .ni-tap-confirm-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* 로그인 후 메인(사진2) */
+    .ni-dash-panel {
+      display: none;
+      text-align: left;
+    }
+    .ni-dash-panel.is-visible {
+      display: block;
+    }
+    .ni-dash-head {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      min-height: 36px;
+    }
+    /* 로그인(사진1)과 동일 AXPAY 로고 — 대시보드 상단 통일 */
+    .ni-dash-brand {
+      text-align: center;
+      margin: 0;
+      user-select: none;
+      line-height: 1;
+    }
+    .ni-dash-brand .ni-login-ax {
+      font-size: 2rem;
+    }
+    .ni-dash-brand .ni-login-pay {
+      font-size: 2rem;
+    }
+    .ni-dash-logout {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #e0f2fe;
+      background: #1d4ed8;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .ni-dash-logout:hover {
+      filter: brightness(1.08);
+    }
+    .ni-dash-history {
+      width: 100%;
+      height: 42px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      border: 2px solid #2563eb;
+      background: transparent;
+      color: #93c5fd;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .ni-dash-history:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .ni-dash-member {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #152447;
+      margin-bottom: 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .ni-dash-member-id {
+      color: #38bdf8;
+      font-weight: 800;
+    }
+    .ni-dash-account-box {
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 14px 14px 12px;
+      margin-bottom: 12px;
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .ni-dash-account-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #e2e8f0;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .ni-dash-account-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+    .ni-dash-account-row strong {
+      color: #f8fafc;
+      font-weight: 700;
+    }
+    .ni-dash-account-num {
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffffff;
+      word-break: break-all;
+      text-align: right;
+    }
+    .ni-dash-change-acc {
+      width: 100%;
+      height: 40px;
+      margin-bottom: 14px;
+      border-radius: 10px;
+      border: 2px solid #2563eb;
+      background: transparent;
+      color: #93c5fd;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .ni-dash-change-acc:hover {
+      background: rgba(37, 99, 235, 0.1);
+    }
+    .ni-dash-amount {
+      width: 100%;
+      height: 46px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid #3d4759;
+      background: #141821;
+      color: #e2e8f0;
+      font-size: 14px;
+      margin-bottom: 14px;
+      box-sizing: border-box;
+    }
+    .ni-dash-amount::placeholder {
+      color: #64748b;
+    }
+    .ni-dash-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .ni-dash-buy,
+    .ni-dash-sell {
+      height: 48px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      cursor: pointer;
+    }
+    .ni-dash-buy {
+      background: linear-gradient(180deg, #22c55e, #16a34a);
+    }
+    .ni-dash-sell {
+      background: linear-gradient(180deg, #3b82f6, #2563eb);
+    }
+    .ni-dash-buy:hover,
+    .ni-dash-sell:hover {
+      filter: brightness(1.06);
+    }
+
+    .left-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      border: 1px solid #7c5e26;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 6px;
+      background: #7c5e26;
+    }
+    .left-grid div {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #e6e9ef;
+      background: linear-gradient(180deg, #171a21, #0f1218);
+      padding: 6px 4px;
+      line-height: 1.15;
+    }
+    .left-bottom {
+      margin-bottom: 8px;
+      border: 1px solid #b98a33;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f131a;
+    }
+    .left-bottom img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .left-bottom-legacy {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .left-banner {
+      min-height: 66px;
+      border-radius: 8px;
+      border: 1px solid #b98a33;
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      padding: 5px 6px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffe6a8;
+      letter-spacing: 0.01em;
+      text-shadow:
+        0 1px 0 rgba(0, 0, 0, 0.85),
+        0 2px 6px rgba(0, 0, 0, 0.9);
+      background-size: cover;
+      background-position: center;
+      box-shadow:
+        inset 0 -28px 42px rgba(5, 5, 7, 0.82),
+        inset 0 0 0 1px rgba(255, 219, 142, 0.16);
+      background-repeat: no-repeat;
+      cursor: pointer;
+      transition: transform 0.16s ease, filter 0.16s ease;
+    }
+    .left-banner:hover {
+      transform: scale(1.06);
+      filter: brightness(1.08);
+    }
+    .left-banner.casino {
+      background-image: url("/game-strip.png");
+      background-position: 75% center;
+    }
+    .left-banner.slot {
+      background-image: url("/game-strip.png");
+      background-position: 100% center;
+    }
+    .sports-list {
+      border: 1px solid #7c5e26;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #11151d;
+    }
+    .sports-head {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #222;
+      background: linear-gradient(180deg, #f9e2a8, #b68132);
+      border-bottom: 1px solid #7c5e26;
+    }
+    .sports-item {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      border-bottom: 1px solid #262b36;
+      color: #edf1f7;
+      font-size: 12px;
+      background: linear-gradient(180deg, #171c25, #121720);
+    }
+    .sports-item:last-child { border-bottom: 0; }
+    .sports-item .label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .sports-item .count {
+      color: #ff9a1a;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .hot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 19px;
+      padding: 0 7px;
+      border-radius: 999px;
+      margin-right: 6px;
+      font-size: 10px;
+      font-weight: 800;
+      color: #fff;
+      background: radial-gradient(circle at 30% 25%, #ff8a8a, #f13232);
+      box-shadow: 0 0 10px rgba(241, 50, 50, 0.45);
+    }
+    .center { min-width: 0; }
+    .hero-row {
+      display: block;
+      margin-bottom: 8px;
+    }
+    .hero-card {
+      min-height: 205px;
+      border-radius: 10px;
+      border: 1px solid var(--line-gold);
+      position: relative;
+      overflow: hidden;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: linear-gradient(180deg, #151a24, #10151e);
+      box-shadow: inset 0 0 0 1px rgba(255, 208, 120, 0.16);
+    }
+    .hero-card h1 {
+      margin: 0;
+      font-size: 45px;
+      line-height: 1.22;
+      white-space: nowrap;
+      color: #f2f4f8;
+      text-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.2),
+        0 2px 6px rgba(0, 0, 0, 0.45),
+        0 6px 14px rgba(0, 0, 0, 0.55);
+      min-height: 1.2em;
+    }
+    .typing-caret::after {
+      content: "";
+      display: inline-block;
+      width: 2px;
+      height: 0.9em;
+      margin-left: 6px;
+      background: #dfe5ef;
+      vertical-align: -0.08em;
+      animation: caretBlink 0.8s steps(1, end) infinite;
+    }
+    @keyframes caretBlink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    .hero-guide {
+      margin-top: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #dfe7f6;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      pointer-events: none;
+    }
+    .hero-guide.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .hero-card p {
+      margin: 8px 0 0;
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff2cd;
+      text-shadow: 0 3px 10px rgba(0, 0, 0, 0.7);
+    }
+    .icon-strip {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 7px;
+      margin-bottom: 8px;
+      padding: 0 1px;
+    }
+    .icon {
+      height: 49px;
+      border-radius: 10px;
+      border: 1px solid #3a4c70;
+      background:
+        linear-gradient(180deg, rgba(132, 167, 255, 0.08), rgba(132, 167, 255, 0) 36%),
+        linear-gradient(180deg, #182338 0%, #121b2c 58%, #101827 100%);
+      display: grid;
+      place-items: center;
+      color: #f1f6ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      box-shadow:
+        inset 0 1px 0 rgba(164, 190, 255, 0.22),
+        0 0 0 1px rgba(8, 12, 20, 0.5);
+      cursor: pointer;
+      transition: transform 0.16s ease, filter 0.16s ease, border-color 0.16s ease;
+    }
+    .icon:hover {
+      transform: scale(1.04);
+      filter: brightness(1.08);
+      border-color: #5573a8;
+    }
+    .notice-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .notice {
+      border: 1px solid #343946;
+      border-radius: 9px;
+      overflow: hidden;
+      background: #12151d;
+    }
+    .notice b {
+      display: block;
+      font-size: 12px;
+      color: #ffd88a;
+      padding: 9px 10px;
+      border-bottom: 1px solid #2c303a;
+      background: #1a1f29;
+    }
+    .notice ul { margin: 0; padding: 7px 10px; list-style: none; }
+    .notice li {
+      font-size: 12px;
+      color: #c4c9d3;
+      padding: 6px 0;
+      border-bottom: 1px dashed #2c313d;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .game-row {
+      border: 1px solid #5d4722;
+      border-radius: 9px;
+      overflow: hidden;
+      margin-bottom: 2px;
+      background: #0e1219;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .game-strip {
+      width: min(100%, 1024px);
+      height: auto;
+      display: block;
+    }
+    .right-login {
+      padding: 10px;
+      border-bottom: 1px solid #2b303b;
+      background: #141923;
+    }
+    .login-state {
+      border: 1px solid #3a4150;
+      border-radius: 8px;
+      background: #0f141d;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    .login-state .status {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid #3e9f68;
+      background: rgba(28, 120, 71, 0.25);
+      color: #9ef2c1;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .login-state .id {
+      color: #f2f5fb;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+    .login-state .meta {
+      color: #aeb5c4;
+      font-size: 11px;
+    }
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .quick-actions button {
+      height: 30px;
+      border-radius: 6px;
+      border: 1px solid #3a4150;
+      background: #101620;
+      color: #d7ddea;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.16s ease, background-color 0.16s ease;
+    }
+    .quick-actions button:hover {
+      transform: scale(1.1);
+      background: #172131;
+    }
+    .toggle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #b7bdc9;
+      margin: 8px 0;
+    }
+    .dot {
+      width: 28px;
+      height: 16px;
+      border-radius: 999px;
+      background: #1f844f;
+      border: 1px solid #46c979;
+    }
+    .right-box {
+      margin: 8px;
+      border: 1px solid #383e4b;
+      border-radius: 8px;
+      background: #151b25;
+      padding: 9px;
+      font-size: 12px;
+      color: #c8cdd7;
+    }
+    .right-box b { color: #ffd88b; display: block; margin-bottom: 5px; }
+    .bet-panel {
+      margin: 8px;
+      border: 1px solid #454b59;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f141d;
+    }
+    .bet-empty {
+      min-height: 72px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: #f3f6fb;
+      font-size: 12px;
+      border-bottom: 1px solid #2e3441;
+      background: linear-gradient(180deg, #20242e, #171b23);
+      padding: 6px;
+    }
+    .bet-head {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-bottom: 1px solid #2c313c;
+      background: #121720;
+      color: #f4f7fd;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .bet-head .amount {
+      height: 26px;
+      border-radius: 5px;
+      border: 1px solid #3a4150;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 8px;
+      background: #1d232e;
+      color: #fff;
+      min-width: 90px;
+    }
+    .bet-quick {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 3px;
+      padding: 6px 8px;
+      border-bottom: 1px solid #2c313c;
+      background: #10151d;
+    }
+    .bet-quick span {
+      height: 26px;
+      border-radius: 4px;
+      border: 1px solid #3a4150;
+      background: linear-gradient(180deg, #1f242d, #111720);
+      color: #f3f6fb;
+      font-size: 11px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+    .bet-table {
+      border-top: 1px solid #202632;
+    }
+    .bet-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 34px;
+      padding: 0 10px;
+      border-bottom: 1px solid #242a36;
+      font-size: 12px;
+      color: #e6ebf5;
+      background: #111723;
+    }
+    .bet-row .val {
+      color: #8fe4ff;
+      font-weight: 700;
+    }
+    .bet-submit-wrap {
+      padding: 10px;
+      background: #0f141d;
+    }
+    .bet-submit {
+      height: 38px;
+      border-radius: 7px;
+      border: 1px solid #b38631;
+      background: linear-gradient(180deg, #f8dfa1, #bc872f);
+      color: #2a1c09;
+      font-size: 23px;
+      font-weight: 800;
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+    .footer-actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .no-install-guide {
+      margin-top: 14px;
+      border: 1px solid var(--line-gold);
+      border-radius: 10px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #14161d, #0e1015);
+      scroll-margin-top: 12px;
+    }
+    .no-install-guide h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #a7f3d0;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(52, 127, 85, 0.45);
+      background: linear-gradient(180deg, #14241c, #101812);
+    }
+    .no-install-guide .no-install-lead {
+      margin: 0;
+      padding: 10px 14px 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .no-install-guide ol {
+      margin: 0;
+      padding: 10px 14px 14px 28px;
+      font-size: 12px;
+      color: #c9cdd6;
+      line-height: 1.55;
+    }
+    .no-install-guide li {
+      padding: 4px 0;
+    }
+    .btn {
+      height: 44px;
+      border-radius: 13px;
+      padding: 0 18px;
+      min-width: 190px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      border: 1px solid #353b48;
+      color: #e9edf7;
+      background: linear-gradient(180deg, #161a23, #0d1017);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      transition: transform 0.16s ease, filter 0.16s ease;
+    }
+    .btn:hover {
+      transform: scale(1.1);
+      filter: brightness(1.05);
+    }
+    .btn-gold {
+      border-color: #b78a33;
+      color: #1c1409;
+      background: linear-gradient(180deg, #f8d57d, #d7a339);
+      box-shadow: 0 0 0 1px rgba(255, 220, 146, 0.35) inset;
+    }
+    @media (max-width: 1160px) {
+      .grid { grid-template-columns: 1fr; }
+      .nav-gold { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      .notice-row { grid-template-columns: 1fr; }
+      .icon-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .game-row { margin-bottom: 2px; }
+      .hero-card h1 { font-size: 30px; }
+      .hero-card p { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header-top">
+      <div class="brand">AXPAY DEMO</div>
+      <div class="quick">
+        <span>충전</span><span>환전</span><span>문의</span><span>이벤트</span><span>공지</span>
+      </div>
+    </div>
+    <div class="nav-gold">
+      <span><b>스포츠</b></span><span><b>라이브스포츠</b></span><span><b>스코어</b></span><span><b>실시간스코어</b></span><span><b>토토추천</b></span>
+      <span><b>카지노</b></span><span><b>가상스포츠</b></span><span><b>미니게임</b></span><span><b>티켓관리</b></span><span><b>고객센터</b></span>
+    </div>
+
+    <div class="grid">
+      <aside class="panel">
+        <div class="panel-head">빠른 메뉴</div>
+        <div class="left-section">
+          <div class="left-quick" id="chargeExchangeRow">
+            <button id="chargeBtn">+ 충전</button>
+            <button id="exchangeBtn">- 환전</button>
+          </div>
+          <div class="left-grid">
+            <div>해외형<br>스포츠</div><div>국내형<br>스포츠</div><div>스페셜</div>
+            <div>실시간<br>스포츠</div><div>E-스포츠</div><div>TITI홀덤</div>
+            <div>가상스<br>포츠</div><div>미니게임</div><div>룰렛</div>
+            <div>페이백</div><div>머니내역</div><div>베팅내역</div>
+            <div>출석부</div><div>공지/<br>규정</div><div>이벤트</div>
+          </div>
+          <div class="left-bottom">
+            <img src="/casino-slot-strip.png" alt="카지노 슬롯 배너" />
+          </div>
+          <div class="sports-list">
+            <div class="sports-head">⑦ 인기스포츠리스트</div>
+            <div class="sports-item">
+              <span class="label">⭐ 즐겨찾기</span>
+              <span class="count">0</span>
+            </div>
+            <div class="sports-item">
+              <span class="label">📌 오늘의 주요경기</span>
+              <span class="count">28</span>
+            </div>
+            <div class="sports-item">
+              <span class="label">⚽ 축구</span>
+              <span><span class="hot">HOT</span><span class="count">173</span></span>
+            </div>
+            <div class="sports-item">
+              <span class="label">⚾ 야구</span>
+              <span><span class="hot">HOT</span><span class="count">36</span></span>
+            </div>
+            <div class="sports-item">
+              <span class="label">🏀 농구</span>
+              <span class="count">51</span>
+            </div>
+            <div class="sports-item">
+              <span class="label">🏐 배구</span>
+              <span class="count">13</span>
+            </div>
+            <div class="sports-item">
+              <span class="label">🏒 아이스 하키</span>
+              <span class="count">12</span>
+            </div>
+            <div class="sports-item">
+              <span class="label">🎮 E-스포츠</span>
+              <span class="count">79</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="center">
+        <section class="hero-row">
+          <article class="hero-card">
+            <h1 id="typingTitle" class="typing-caret" data-text="이 공간은 AXPAY 무설치 버전 데모 공간입니다."></h1>
+            <p id="heroGuide" class="hero-guide">충환전시 충환전을 클릭합니다.</p>
+          </article>
+        </section>
+
+        <section class="icon-strip">
+          <div class="icon">스포츠</div><div class="icon">LIVE</div><div class="icon">스페셜</div><div class="icon">가상스포츠</div>
+          <div class="icon">카지노</div><div class="icon">미니게임</div><div class="icon">슬롯</div><div class="icon">고객센터</div>
+        </section>
+
+        <section class="notice-row">
+          <article class="notice">
+            <b>공지사항</b>
+            <ul>
+              <li>신규 가입 이벤트: 첫 거래 수수료 할인</li>
+              <li>입금 후 5분 내 미확인 시 문의 바랍니다</li>
+              <li>매칭 지연 시 자동 취소 정책 안내</li>
+              <li>텔레그램 상담 채널 운영 시간 변경</li>
+            </ul>
+          </article>
+          <article class="notice">
+            <b>작동 절차</b>
+            <ul>
+              <li>1) 회원 인증 후 구매/판매 금액 입력</li>
+              <li>2) AI 매칭 완료 후 상대 정보 확인</li>
+              <li>3) 입금 완료 및 확인 버튼 처리</li>
+              <li>4) 관리자 로그 기록 후 거래 종료</li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="game-row">
+          <img class="game-strip" src="/game-strip.png" alt="스포츠 실시간 미니게임 카지노 슬롯" />
+        </section>
+
+        <div class="footer-actions">
+          <a href="/" class="btn">HOME 바로가기</a>
+        </div>
+      </main>
+
+      <aside class="panel">
+        <div class="panel-head">로그인 / 고객센터</div>
+        <div class="right-login">
+          <div class="login-state">
+            <span class="status">로그인 완료</span>
+            <div class="id">아이디: axpay</div>
+            <div class="meta">등급: 정회원 · 마지막 접속: 방금 전</div>
+          </div>
+          <div class="quick-actions">
+            <button>마이페이지</button>
+            <button>로그아웃</button>
+          </div>
+          <div class="toggle"><span>실시간 알림 ON</span><span class="dot"></span></div>
+        </div>
+        <div class="right-box"><b>텔레그램 고객센터</b><a href="https://t.me/AxPayCS" target="_blank" rel="noopener noreferrer" style="color:#9fd8ff; text-decoration:none;">@AxPayCS</a></div>
+        <div class="bet-panel">
+          <div class="bet-empty">선택된 베팅내역이 없습니다.</div>
+          <div class="bet-head">
+            <span>베팅</span>
+            <span>↻</span>
+            <span class="amount">0</span>
+          </div>
+          <div class="bet-quick">
+            <span>일천</span><span>일만</span><span>오만</span><span>십만</span><span>백만</span><span>최대</span>
+          </div>
+          <div class="bet-table">
+            <div class="bet-row"><span>총 배당</span><span class="val">0.00 배</span></div>
+            <div class="bet-row"><span>총 당첨금</span><span class="val">0 원</span></div>
+            <div class="bet-row"><span>최소 베팅금액</span><span class="val">0 원</span></div>
+            <div class="bet-row"><span>최대 베팅금액</span><span class="val">0 원</span></div>
+            <div class="bet-row"><span>최대 당첨금액</span><span class="val">0 원</span></div>
+            <div class="bet-row"><span>최대 배당</span><span class="val">0 배</span></div>
+          </div>
+          <div class="bet-submit-wrap">
+            <div class="bet-submit">베팅하기</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <section id="no-install-guide" class="no-install-guide" aria-labelledby="no-install-heading">
+      <h2 id="no-install-heading">무설치 버전 작동법</h2>
+      <p class="no-install-lead">별도 앱 설치 없이 브라우저에서 바로 이용할 수 있습니다.</p>
+      <ol>
+        <li>모바일·PC 브라우저에서 본 페이지 주소로 접속합니다.</li>
+        <li>회원 로그인 또는 간편 연동 후 서비스 메뉴를 이용합니다.</li>
+        <li>충전·환전은 좌측 빠른 메뉴에서 진행합니다.</li>
+        <li>문의는 우측 안내의 텔레그램 고객센터(@AxPayCS)를 이용합니다.</li>
+      </ol>
+    </section>
+  </div>
+  <div id="tapHand" class="tap-hand" aria-hidden="true">👆</div>
+
+  <div id="niTapConfirmWrap" class="ni-tap-confirm-wrap" hidden>
+    <button type="button" id="niTapConfirmBtn" class="ni-tap-confirm-btn">확인</button>
+  </div>
+
+  <div id="niLoginOverlay" class="ni-login-overlay" role="dialog" aria-modal="true" aria-labelledby="ni-login-brand" aria-label="AXPAY 로그인" hidden>
+    <div class="ni-login-dialog" role="document">
+      <div id="ni-login-panel">
+        <div class="ni-login-brand" id="ni-login-brand">
+          <span class="ni-login-ax">AX</span><span class="ni-login-pay">PAY</span>
+        </div>
+        <form class="ni-login-form" action="#" method="dialog" onsubmit="return false;">
+          <div class="ni-login-field">
+            <label for="ni-login-id">아이디</label>
+            <input id="ni-login-id" type="text" name="id" placeholder="아이디" autocomplete="off" readonly />
+          </div>
+          <div class="ni-login-field">
+            <label for="ni-login-pw">비밀번호</label>
+            <input id="ni-login-pw" type="password" name="password" placeholder="비밀번호" autocomplete="off" readonly />
+          </div>
+          <button type="button" id="ni-login-submit-btn" class="ni-login-submit">로그인</button>
+        </form>
+        <p class="ni-login-footer">
+          아직 계정이 없으신가요? <a href="#">회원가입</a>
+        </p>
+      </div>
+
+      <div id="ni-dash-panel" class="ni-dash-panel" hidden aria-label="AXPAY 메인">
+        <div class="ni-dash-head">
+          <div class="ni-dash-brand">
+            <span class="ni-login-ax">AX</span><span class="ni-login-pay">PAY</span>
+          </div>
+          <button type="button" class="ni-dash-logout">로그아웃</button>
+        </div>
+        <button type="button" class="ni-dash-history">거래 내역</button>
+        <div class="ni-dash-member">회원 ID : <span class="ni-dash-member-id">TEST</span></div>
+        <div class="ni-dash-account-box">
+          <div class="ni-dash-account-title">현재 등록된 계좌</div>
+          <div class="ni-dash-account-row"><span>예금주</span><strong>테스트</strong></div>
+          <div class="ni-dash-account-row"><span>은행명</span><strong>카카오뱅크</strong></div>
+          <div class="ni-dash-account-row" style="align-items: flex-start;"><span style="flex-shrink:0;">계좌번호</span><span class="ni-dash-account-num">333333343534534543</span></div>
+        </div>
+        <button type="button" class="ni-dash-change-acc">계좌번호 변경요청</button>
+        <input type="text" class="ni-dash-amount" placeholder="금액을 입력하세요." readonly />
+        <div class="ni-dash-actions">
+          <button type="button" class="ni-dash-buy">구매</button>
+          <button type="button" class="ni-dash-sell">판매</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const el = document.getElementById("typingTitle");
+      const guide = document.getElementById("heroGuide");
+      const hand = document.getElementById("tapHand");
+      const chargeExchangeRow = document.getElementById("chargeExchangeRow");
+      const chargeBtn = document.getElementById("chargeBtn");
+      const exchangeBtn = document.getElementById("exchangeBtn");
+      if (!el) return;
+      const fullText = el.getAttribute("data-text") || "";
+      let i = 0;
+      const speed = 95;
+      /** 충전·환전 '버튼 사이' 정중앙(세로는 줄 기준)에 손끝이 오도록 정렬 */
+      function moveHandToMiddle() {
+        if (!hand || !chargeExchangeRow) return;
+        let cx;
+        let rowMidY;
+        if (chargeBtn && exchangeBtn) {
+          const r1 = chargeBtn.getBoundingClientRect();
+          const r2 = exchangeBtn.getBoundingClientRect();
+          cx = (r1.right + r2.left) / 2;
+          rowMidY = (r1.top + r1.height / 2 + r2.top + r2.height / 2) / 2;
+        } else {
+          const rect = chargeExchangeRow.getBoundingClientRect();
+          cx = rect.left + rect.width / 2;
+          rowMidY = rect.top + rect.height / 2;
+        }
+        hand.style.left = cx + "px";
+        hand.style.top = rowMidY + "px";
+        /** 레이아웃·폰트 반영 후 손끝(👆 상단)이 충·환 줄 세로 기준에 오도록 1회 보정 */
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            const hr = hand.getBoundingClientRect();
+            const tipY = hr.top + hr.height * 0.06;
+            const delta = rowMidY - tipY;
+            const base =
+              hand.style.top !== ""
+                ? parseFloat(hand.style.top, 10)
+                : rowMidY;
+            hand.style.top = base + delta + "px";
+          });
+        });
+      }
+      const niTapConfirmWrap = document.getElementById("niTapConfirmWrap");
+      function positionNiTapConfirmBtn() {
+        if (!hand || !niTapConfirmWrap || !hand.classList.contains("show")) return;
+        const hr = hand.getBoundingClientRect();
+        const cx = hr.left + hr.width / 2;
+        const gap = 12;
+        niTapConfirmWrap.style.left = cx + "px";
+        niTapConfirmWrap.style.top = hr.bottom + gap + "px";
+        niTapConfirmWrap.style.transform = "translateX(-50%)";
+      }
+      window.addEventListener("resize", function () {
+        if (hand && hand.classList.contains("show")) moveHandToMiddle();
+        if (niTapConfirmWrap && niTapConfirmWrap.classList.contains("open")) {
+          window.requestAnimationFrame(positionNiTapConfirmBtn);
+        }
+      });
+      window.addEventListener(
+        "scroll",
+        function () {
+          if (hand && hand.classList.contains("show")) moveHandToMiddle();
+          if (niTapConfirmWrap && niTapConfirmWrap.classList.contains("open")) {
+            window.requestAnimationFrame(positionNiTapConfirmBtn);
+          }
+        },
+        true
+      );
+      const niOverlay = document.getElementById("niLoginOverlay");
+      const niTapConfirmBtn = document.getElementById("niTapConfirmBtn");
+      function showNiTapConfirm() {
+        if (!niTapConfirmWrap) return;
+        moveHandToMiddle();
+        if (hand) hand.classList.add("await-confirm");
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(positionNiTapConfirmBtn);
+        });
+        niTapConfirmWrap.removeAttribute("hidden");
+        niTapConfirmWrap.classList.add("open");
+        if (niTapConfirmBtn) window.setTimeout(() => niTapConfirmBtn.focus(), 80);
+      }
+      function hideNiTapConfirm() {
+        if (!niTapConfirmWrap) return;
+        niTapConfirmWrap.classList.remove("open");
+        niTapConfirmWrap.setAttribute("hidden", "");
+        if (hand) {
+          hand.classList.remove("await-confirm");
+          hand.classList.remove("show");
+          hand.setAttribute("aria-hidden", "true");
+        }
+      }
+      if (niTapConfirmBtn) {
+        niTapConfirmBtn.addEventListener("click", function () {
+          hideNiTapConfirm();
+          openNiLoginModal();
+        });
+      }
+      function typeIntoInput(input, text, charDelay, done) {
+        if (!input || text == null) {
+          if (done) done();
+          return;
+        }
+        input.value = "";
+        let idx = 0;
+        function step() {
+          if (idx >= text.length) {
+            if (done) done();
+            return;
+          }
+          input.value += text.charAt(idx);
+          idx += 1;
+          window.setTimeout(step, charDelay);
+        }
+        step();
+      }
+      function runNiLoginDemo() {
+        const idInput = document.getElementById("ni-login-id");
+        const pwInput = document.getElementById("ni-login-pw");
+        if (!idInput || !pwInput) return;
+        idInput.value = "";
+        pwInput.value = "";
+        idInput.focus();
+        const charDelay = 130;
+        const pauseBetween = 400;
+        typeIntoInput(idInput, "TEST", charDelay, function () {
+          window.setTimeout(function () {
+            pwInput.focus();
+            typeIntoInput(pwInput, "11111", charDelay, function () {
+              /* 사진2(메인) 전환은 보류 — 로그인 모달(사진1)에서 종료 */
+            });
+          }, pauseBetween);
+        });
+      }
+      function openNiLoginModal() {
+        if (!niOverlay) return;
+        const loginPanel = document.getElementById("ni-login-panel");
+        const dashPanel = document.getElementById("ni-dash-panel");
+        if (loginPanel) {
+          loginPanel.removeAttribute("hidden");
+          loginPanel.style.display = "";
+        }
+        if (dashPanel) {
+          dashPanel.setAttribute("hidden", "");
+          dashPanel.classList.remove("is-visible");
+        }
+        niOverlay.hidden = false;
+        niOverlay.classList.add("open");
+        niOverlay.setAttribute("aria-label", "AXPAY 로그인");
+        window.setTimeout(runNiLoginDemo, 550);
+      }
+      /** 같은 자리(충전·환전 중앙)를 다섯 번 연속 누른 뒤 로그인 창 */
+      function tapMiddleFiveThenLogin() {
+        if (!hand || !chargeExchangeRow) return;
+        const tapDuration = 260;
+        const gap = 380;
+        const taps = 5;
+        function once() {
+          chargeExchangeRow.classList.add("demo-click");
+          hand.classList.add("tap");
+          window.setTimeout(() => {
+            chargeExchangeRow.classList.remove("demo-click");
+            hand.classList.remove("tap");
+          }, tapDuration);
+        }
+        for (let k = 0; k < taps; k += 1) {
+          window.setTimeout(once, k * gap);
+        }
+        const doneAfterMs = (taps - 1) * gap + tapDuration + 100;
+        window.setTimeout(() => {
+          showNiTapConfirm();
+        }, doneAfterMs);
+      }
+      function startDemoAction() {
+        if (!guide || !hand || !chargeExchangeRow) return;
+        moveHandToMiddle();
+        guide.classList.add("show");
+        hand.classList.add("show");
+        hand.setAttribute("aria-hidden", "false");
+        moveHandToMiddle();
+        window.setTimeout(tapMiddleFiveThenLogin, 80);
+      }
+      function typeNext() {
+        if (i <= fullText.length) {
+          el.textContent = fullText.slice(0, i);
+          i += 1;
+          window.setTimeout(typeNext, speed);
+        } else {
+          el.classList.remove("typing-caret");
+          startDemoAction();
+        }
+      }
+      typeNext();
+    })();
+  </script>
+</body>
+</html>
