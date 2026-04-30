@@ -117,24 +117,10 @@ export default function LandingPage({ onEnterSimulator }: LandingPageProps) {
     <div className="min-h-screen w-full overflow-x-hidden">
       {/* Hero */}
       <header className="relative min-h-[90vh] flex flex-col items-center justify-center px-6 sm:px-8 lg:px-12 pt-24 pb-32 overflow-hidden">
-        {/* 룰렛 배경 영상 (고화질: public/videos/roulette-bg.mp4 에 파일 넣기) */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ objectPosition: 'center center' }}
-        >
-          {/* 고화질 영상은 public/videos/roulette-bg.mp4 에 넣으면 우선 재생 */}
-          <source src={`${import.meta.env.BASE_URL}videos/roulette-bg.mp4`} type="video/mp4" />
-          {/* fallback: Pixabay 무료 룰렛 영상 (1920x1080) */}
-          <source src="https://cdn.pixabay.com/video/2020/11/06/54607-477445139_large.mp4" type="video/mp4" />
-        </video>
-        {/* 어두운 오버레이 완화: 영상 퀄리티 최대한 보존 + 상·하단만 비네팅 */}
-        <div className="absolute inset-0 bg-slate-950/25 pointer-events-none" />
-        <div className="absolute inset-0 mesh-bg opacity-20 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/45 via-transparent to-slate-950/55 pointer-events-none" />
+        {/* 배포(랜딩)에서 배경 사진/영상 비표시 — 단색·그라데이션만 사용 */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 pointer-events-none" />
+        <div className="absolute inset-0 mesh-bg opacity-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-transparent to-slate-950/40 pointer-events-none" />
         <div className="relative z-10 w-full max-w-5xl mx-auto text-center min-w-0 px-2">
           <h1 className="text-3xl min-[400px]:text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-bold tracking-tight mb-16 flex flex-wrap items-baseline justify-center gap-x-2 sm:gap-x-3 gap-y-4">
             <span className="text-amber-200 font-medium tracking-[0.15em] min-[400px]:tracking-[0.25em] uppercase inline-block drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] break-words max-w-full">
